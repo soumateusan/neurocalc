@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Brain, Activity, ClipboardList, Stethoscope, Zap, Copy, Check, RotateCcw, Info } from "lucide-react";
+import React, { useState } from "react";
+import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
 
 /* ---------- clipboard ---------- */
 function copyToClipboard(text, onOk) {
@@ -156,7 +156,7 @@ const meemSections = [
   { key: "ot", title: "Orientação temporal", items: ["Ano", "Estação do ano", "Mês", "Dia da semana", "Dia do mês"] },
   { key: "oe", title: "Orientação espacial", items: ["Estado", "Cidade", "Bairro / rua", "Local (instituição)", "Andar / cômodo"] },
   { key: "reg", title: "Memória de registro", note: "Diga 3 palavras (1 ponto cada). Edite abaixo as palavras usadas.", words: true, len: 3 },
-  { key: "ac", title: "Atenção e cálculo", note: "100 − 7 sucessivamente (ou soletrar 'MUNDO' de trás para frente).", items: ["93", "86", "79", "72", "65"] },
+  { key: "ac", title: "Atenção e cálculo", note: "100 − 7 sucessivamente (ou soletrar “MUNDO” de trás para frente).", items: ["93", "86", "79", "72", "65"] },
   { key: "evoc", title: "Memória de evocação", note: "Marque cada palavra recordada corretamente.", evoc: true, len: 3 },
   { key: "nom", title: "Nomeação", note: "Mostrar os objetos e pedir o nome.", items: ["Relógio", "Caneta"] },
   { key: "rep", title: "Repetição", note: "Pedir para repetir a frase.", items: ["“Nem aqui, nem ali, nem lá”"] },
@@ -490,6 +490,7 @@ function Migraine() {
 
   return (
     <div className="space-y-5">
+      {/* MIDAS */}
       <section className="space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">MIDAS — incapacidade (últimos 3 meses)</h2>
         <ResultBar title={`MIDAS — Grau ${grade}`} value={`${score}`} suffix="pts" tone={gtone} note={gl} />
@@ -510,6 +511,7 @@ function Migraine() {
         <CopyBlock text={midasText} ok={ok1} onCopy={() => fire1(midasText)} onReset={() => setM({ q1: 0, q2: 0, q3: 0, q4: 0, q5: 0, a: 0, b: 0 })} />
       </section>
 
+      {/* Perfil mensal */}
       <section className="space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">Perfil mensal de cefaleia</h2>
         <div className="grid grid-cols-3 gap-2">
@@ -542,6 +544,158 @@ function Migraine() {
   );
 }
 
+/* ================= PHQ-9 (depressão) ================= */
+const freqDesc = ["Nenhuma vez", "Vários dias", "Mais da metade dos dias", "Quase todos os dias"];
+const phq9Items = [
+  "Pouco interesse ou prazer em fazer as coisas",
+  "Sentir-se para baixo, deprimido ou sem perspectiva",
+  "Dificuldade para pegar no sono, permanecer dormindo ou dormir demais",
+  "Sentir-se cansado ou com pouca energia",
+  "Falta de apetite ou comer demais",
+  "Sentir-se mal consigo mesmo — ou achar que é um fracasso ou que decepcionou sua família/você mesmo",
+  "Dificuldade de concentração (ex.: ler ou ver TV)",
+  "Lentidão para se mover ou falar (perceptível) — ou o oposto, muito agitado/inquieto",
+  "Pensar que seria melhor estar morto ou em se ferir de alguma maneira",
+];
+function phq9Severity(t) {
+  if (t <= 4) return ["Mínima", "teal"];
+  if (t <= 9) return ["Leve", "amber"];
+  if (t <= 14) return ["Moderada", "amber"];
+  if (t <= 19) return ["Moderadamente grave", "red"];
+  return ["Grave", "red"];
+}
+function PHQ9() {
+  const [s, setS] = useState(Array(9).fill(0));
+  const [ok, fire] = useCopyOk();
+  const set = (i, v) => setS((p) => p.map((x, j) => (j === i ? v : x)));
+  const total = s.reduce((a, b) => a + b, 0);
+  const [sev, tone] = phq9Severity(total);
+  const q9 = s[8] > 0;
+  const text = `PHQ-9 (depressão): ${total}/27 — gravidade ${sev.toLowerCase()}. Item 9 (ideação): ${s[8]}.`;
+  return (
+    <div className="space-y-4">
+      <ResultBar title="Pontuação" value={`${total}`} suffix="/27" tone={tone} note={`Depressão — gravidade ${sev.toLowerCase()}`} />
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+        <p>Nas últimas 2 semanas, com que frequência cada problema o(a) incomodou? Faixas: 0–4 mínima · 5–9 leve · 10–14 moderada · 15–19 moderadamente grave · 20–27 grave.</p>
+      </div>
+      {q9 && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800 flex gap-2">
+          <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+          <span>Item 9 pontuado (pensamentos de morte/autoagressão). Recomenda-se avaliação direta do risco de suicídio.</span>
+        </div>
+      )}
+      <div className="space-y-2">
+        {phq9Items.map((it, i) => (
+          <ScoredItem key={i} label={`${i + 1}. ${it}`} bold value={s[i]} options={[0, 1, 2, 3]} desc={freqDesc} onChange={(v) => set(i, v)} />
+        ))}
+      </div>
+      <CopyBlock text={text} ok={ok} onCopy={() => fire(text)} onReset={() => setS(Array(9).fill(0))} />
+    </div>
+  );
+}
+
+/* ================= GAD-7 (ansiedade) ================= */
+const gad7Items = [
+  "Sentir-se nervoso, ansioso ou muito tenso",
+  "Não conseguir parar ou controlar as preocupações",
+  "Preocupar-se demais com diversas coisas",
+  "Dificuldade para relaxar",
+  "Ficar tão agitado que se torna difícil permanecer parado",
+  "Ficar facilmente aborrecido ou irritado",
+  "Sentir medo como se algo terrível fosse acontecer",
+];
+function gad7Severity(t) {
+  if (t <= 4) return ["Mínima", "teal"];
+  if (t <= 9) return ["Leve", "amber"];
+  if (t <= 14) return ["Moderada", "amber"];
+  return ["Grave", "red"];
+}
+function GAD7() {
+  const [s, setS] = useState(Array(7).fill(0));
+  const [ok, fire] = useCopyOk();
+  const set = (i, v) => setS((p) => p.map((x, j) => (j === i ? v : x)));
+  const total = s.reduce((a, b) => a + b, 0);
+  const [sev, tone] = gad7Severity(total);
+  const text = `GAD-7 (ansiedade): ${total}/21 — gravidade ${sev.toLowerCase()}.`;
+  return (
+    <div className="space-y-4">
+      <ResultBar title="Pontuação" value={`${total}`} suffix="/21" tone={tone} note={`Ansiedade — gravidade ${sev.toLowerCase()}`} />
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+        <p>Nas últimas 2 semanas, com que frequência cada problema o(a) incomodou? Faixas: 0–4 mínima · 5–9 leve · 10–14 moderada · 15–21 grave.</p>
+      </div>
+      <div className="space-y-2">
+        {gad7Items.map((it, i) => (
+          <ScoredItem key={i} label={`${i + 1}. ${it}`} bold value={s[i]} options={[0, 1, 2, 3]} desc={freqDesc} onChange={(v) => set(i, v)} />
+        ))}
+      </div>
+      <CopyBlock text={text} ok={ok} onCopy={() => fire(text)} onReset={() => setS(Array(7).fill(0))} />
+    </div>
+  );
+}
+
+/* ================= GDS-15 (depressão geriátrica) ================= */
+/* pointWhen = resposta que pontua (1 ponto) */
+const gds15 = [
+  { q: "Está basicamente satisfeito(a) com sua vida?", pointWhen: "nao" },
+  { q: "Abandonou muitas de suas atividades e interesses?", pointWhen: "sim" },
+  { q: "Sente que sua vida está vazia?", pointWhen: "sim" },
+  { q: "Sente-se frequentemente entediado(a)?", pointWhen: "sim" },
+  { q: "Está de bom humor na maior parte do tempo?", pointWhen: "nao" },
+  { q: "Tem medo de que algo ruim lhe aconteça?", pointWhen: "sim" },
+  { q: "Sente-se feliz na maior parte do tempo?", pointWhen: "nao" },
+  { q: "Sente-se frequentemente desamparado(a)?", pointWhen: "sim" },
+  { q: "Prefere ficar em casa a sair e fazer coisas novas?", pointWhen: "sim" },
+  { q: "Acha que tem mais problemas de memória que a maioria?", pointWhen: "sim" },
+  { q: "Acha maravilhoso estar vivo(a)?", pointWhen: "nao" },
+  { q: "Sente-se inútil do jeito que está agora?", pointWhen: "sim" },
+  { q: "Sente-se cheio(a) de energia?", pointWhen: "nao" },
+  { q: "Sente que sua situação é sem esperança?", pointWhen: "sim" },
+  { q: "Acha que a maioria das pessoas está melhor que você?", pointWhen: "sim" },
+];
+function GDS15() {
+  const [ans, setAns] = useState({}); // i -> 'sim' | 'nao'
+  const [ok, fire] = useCopyOk();
+  const set = (i, v) => setAns((p) => ({ ...p, [i]: v }));
+  const total = gds15.reduce((a, it, i) => a + (ans[i] === it.pointWhen ? 1 : 0), 0);
+  const answered = Object.keys(ans).length;
+  let sev, tone;
+  if (total <= 4) { sev = "Sem depressão"; tone = "teal"; }
+  else if (total <= 9) { sev = "Depressão leve a moderada"; tone = "amber"; }
+  else { sev = "Depressão grave"; tone = "red"; }
+  const text = `GDS-15 (escala de depressão geriátrica): ${total}/15 — ${sev.toLowerCase()}.`;
+  return (
+    <div className="space-y-4">
+      <ResultBar title="Pontuação" value={`${total}`} suffix="/15" tone={tone} note={sev} />
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+        <p>Como o(a) idoso(a) tem se sentido na última semana. Faixas: 0–4 sem depressão · 5–9 leve a moderada · 10–15 grave. {answered < 15 && <b>{15 - answered} pergunta(s) sem resposta.</b>}</p>
+      </div>
+      <div className="space-y-2">
+        {gds15.map((it, i) => {
+          const v = ans[i];
+          return (
+            <div key={i} className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-sm text-slate-700 mb-2">{i + 1}. {it.q}</div>
+              <div className="flex gap-2">
+                {["sim", "nao"].map((opt) => {
+                  const sel = v === opt;
+                  return (
+                    <button key={opt} onClick={() => set(i, opt)}
+                      className={"px-4 py-1.5 rounded-lg text-sm font-semibold border transition-colors " +
+                        (sel ? "bg-teal-600 border-teal-600 text-white" : "bg-white border-slate-200 text-slate-600 hover:border-teal-400")}>
+                      {opt === "sim" ? "Sim" : "Não"}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <CopyBlock text={text} ok={ok} onCopy={() => fire(text)} onReset={() => setAns({})} />
+    </div>
+  );
+}
+
 /* ================= APP ================= */
 const tabs = [
   { id: "meem", label: "MEEM", icon: Brain, comp: MEEM },
@@ -549,6 +703,9 @@ const tabs = [
   { id: "cdr", label: "CDR", icon: ClipboardList, comp: CDR },
   { id: "mgadl", label: "MG-ADL", icon: Stethoscope, comp: MGADL },
   { id: "enxaqueca", label: "Enxaqueca", icon: Zap, comp: Migraine },
+  { id: "phq9", label: "PHQ-9", icon: CloudRain, comp: PHQ9 },
+  { id: "gad7", label: "GAD-7", icon: HeartPulse, comp: GAD7 },
+  { id: "gds15", label: "GDS-15", icon: Users, comp: GDS15 },
 ];
 
 export default function App() {
