@@ -1,7 +1,25 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(python3 -c \"import pypdf; print\\('pypdf ok'\\)\")",
+      "Bash(python3 -c \"import fitz; print\\('pymupdf ok'\\)\")",
+      "Bash(python3 -c \"import pdfplumber; print\\('pdfplumber ok'\\)\")",
+      "WebFetch(domain:pmc.ncbi.nlm.nih.gov)",
+      "Bash(pip install *)",
+      "Bash(python3 -c \"import pypdf; print\\('pypdf OK', pypdf.__version__\\)\")",
+      "WebFetch(domain:www.ncbi.nlm.nih.gov)",
+      "Bash(python3 -m venv venv)",
+      "Bash(./venv/bin/pip install *)",
+      "Bash(./venv/bin/python -c \"import pypdf; print\\('OK', pypdf.__version__\\)\")",
+      "WebSearch",
+      "WebFetch(domain:mobile.fpnotebook.com)",
+      "WebFetch(domain:academic.oup.com)",
+      "WebFetch(domain:batemanhornecenter.org)",
+      "Bash(./venv/bin/python -I extract.py \"/Users/drmateusan/.claude/projects/-Users-drmateusan-neurocalc/09983a8a-0772-49d5-b01f-834f73b81597/tool-results/webfetch-1792841003758-0c3j5r.pdf\" acr2016.txt)",
+      "Bash(sed -i '' 's/<= 0.2\\)/<= 0.25\\)/' t4d.mjs)",
+      "Bash(node t4d.mjs)",
+      "Bash(node -e ' *)"
     ]
   }
 }

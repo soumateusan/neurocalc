@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
+import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Flame, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
 
 /* ---------- clipboard ---------- */
 function copyToClipboard(text, onOk) {
@@ -457,7 +457,27 @@ function MGADL() {
   );
 }
 
-/* ================= ENXAQUECA (MIDAS + perfil mensal) ================= */
+/* ================= ENXAQUECA (perfil + MIDAS + NRS + escore 4D) ================= */
+
+/* Escala 4D — Pasqualetti et al., Cephalalgia 2025;45(12) (4D = Days, Drugs, Degree, Disability).
+   Utilidades por dimensão (eq. 1.1–1.4), média invertida (eq. 2) e padronização 0–100 (eq. 3). */
+const u4dMMD = (v) => { const m = Math.min(v, 28); return 68.48 - 11.52 * m + 0.582 * m ** 2 - 0.011 * m ** 3; };
+const u4dMAM = (v) => 43.57 - 1.96 * Math.min(v, 60);
+const u4dMID = (v) => 51.43 - 4.836 * Math.log(Math.min(v, 270) + 1) ** 2;
+const u4dNRS = (v) => 28.85 - 11.33 * v + 1.916 * v ** 2 - 0.144 * v ** 3;
+const fourDBands = [
+  [5, "Nenhuma", "teal"], [20, "Muito leve", "teal"], [35, "Leve", "teal"],
+  [50, "Moderada", "amber"], [65, "Grave", "amber"], [80, "Muito grave", "red"],
+  [95, "Gravíssima", "red"], [Infinity, "Extrema", "red"],
+];
+function fourD(mmd, mams, midas, nrs) {
+  const u = [u4dMMD(mmd), u4dMAM(mams), u4dMID(midas), u4dNRS(nrs)];
+  const raw = -(u[0] + u[1] + u[2] + u[3]) / 4;
+  const score = Math.max(0, Math.min(100, (100 * (raw + 48.1)) / 110.7));
+  const [, label, tone] = fourDBands.find(([lim]) => score <= lim);
+  return { u, score, label, tone };
+}
+
 const midasQs = [
   { k: "q1", label: "Dias de falta ao trabalho ou escola", hint: "nos últimos 3 meses" },
   { k: "q2", label: "Dias com produtividade ≥ 50% reduzida no trabalho/escola", hint: "nos últimos 3 meses — não contar os dias já citados acima" },
@@ -467,10 +487,13 @@ const midasQs = [
 ];
 
 function Migraine() {
+  const [p, setP] = useState({ cef: 0, enx: 0, med: 0, doses: 0 });
   const [m, setM] = useState({ q1: 0, q2: 0, q3: 0, q4: 0, q5: 0, a: 0, b: 0 });
-  const [p, setP] = useState({ cef: 0, enx: 0, med: 0 });
+  const [nrs, setNrs] = useState(0);
+  const [prev, setPrev] = useState("");
   const [ok1, fire1] = useCopyOk();
   const [ok2, fire2] = useCopyOk();
+  const [ok4, fire4] = useCopyOk();
   const setMv = (k, v) => setM((o) => ({ ...o, [k]: v }));
   const setPv = (k, v) => setP((o) => ({ ...o, [k]: v }));
 
@@ -484,12 +507,110 @@ function Migraine() {
 
   const chronic = p.cef >= 15 && p.enx >= 8;
   const moh = p.med >= 10;
-  let profText = `Perfil mensal de cefaleia: ${p.cef} dia(s) de cefaleia/mês, ${p.enx} dia(s) com características de enxaqueca/mês, ${p.med} dia(s) de uso de medicação aguda/mês.`;
+  let profText = `Perfil mensal de cefaleia: ${p.cef} dia(s) de cefaleia/mês, ${p.enx} dia(s) com características de enxaqueca/mês, ${p.med} dia(s) de uso de medicação aguda/mês, ${p.doses} dose(s) de medicação aguda/mês.`;
   if (chronic) profText += " Frequência compatível com enxaqueca crônica.";
   if (moh) profText += " Atenção: possível uso excessivo de medicação.";
 
+  /* escore 4D — alimentado pelos dados das seções abaixo */
+  const d = fourD(p.enx, p.doses, score, nrs);
+  const sc = d.score.toFixed(1).replace(".", ",");
+  const dims = [
+    ["Dias de enxaqueca (MMD)", p.enx, "dias/mês", d.u[0]],
+    ["Medicação aguda (MAM)", p.doses, "doses/mês", d.u[1]],
+    ["Incapacidade (MIDAS)", score, "pts", d.u[2]],
+    ["Dor na pior crise (NRS)", nrs, "/10", d.u[3]],
+  ];
+  const prevN = prev.trim() === "" ? NaN : parseFloat(prev.replace(",", "."));
+  const delta = isNaN(prevN) ? null : d.score - Math.max(0, Math.min(100, prevN));
+  const absD = delta === null ? 0 : Math.abs(delta);
+  const mag = absD >= 12 ? "grande" : absD >= 7.5 ? "médio" : absD >= 3 ? "pequeno" : "não relevante";
+  let fourDText = `Escore 4D de enxaqueca: ${sc}/100 — ${d.label.toLowerCase()}. Dias de enxaqueca/mês ${p.enx}, doses de medicação aguda/mês ${p.doses}, MIDAS ${score}, intensidade da pior crise (NRS) ${nrs}/10.`;
+  if (delta !== null) {
+    const dir = delta < 0 ? "melhora" : delta > 0 ? "piora" : "sem variação";
+    fourDText += ` Em relação à avaliação anterior (${prev.trim()}): ${dir} de ${absD.toFixed(1).replace(".", ",")} ponto(s) — tamanho de efeito ${mag}.`;
+  }
+
   return (
     <div className="space-y-5">
+      {/* Escore 4D */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">Escore 4D de enxaqueca</h2>
+        <ResultBar title={`Escore 4D — ${d.label}`} value={sc} suffix="/100" tone={d.tone}
+          note="Composto de dias, medicação, incapacidade e intensidade da dor" />
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-xs font-semibold text-slate-700 mb-2">Utilidade de cada dimensão</div>
+          <div className="space-y-1">
+            {dims.map(([l, v, un, uu]) => (
+              <div key={l} className="flex items-baseline gap-2 text-xs">
+                <span className="text-slate-600 flex-1 min-w-0">{l}</span>
+                <span className="text-slate-400 whitespace-nowrap">{v} {un}</span>
+                <span className={"font-semibold tabular-nums w-14 text-right " + (uu < 0 ? "text-red-600" : "text-teal-700")}>
+                  {uu.toFixed(1).replace(".", ",")}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-slate-400 mt-2">
+            As três primeiras dimensões vêm das seções abaixo (perfil mensal e MIDAS). Utilidade positiva = melhor; negativa = pior.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <NumRow label="Intensidade da dor na pior crise (NRS)" hint="0 a 10 — dimensão de dor do escore 4D" value={nrs} onChange={setNrs} max={10} suffix="/10" />
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+            <div className="min-w-0">
+              <div className="text-sm text-slate-700">Escore 4D da avaliação anterior</div>
+              <div className="text-xs text-slate-400">opcional — compara a resposta ao tratamento</div>
+            </div>
+            <input type="number" value={prev} min={0} max={100} placeholder="—" inputMode="decimal"
+              onChange={(e) => setPrev(e.target.value)}
+              className="w-20 text-center rounded-lg border border-slate-200 py-1.5 text-sm font-semibold text-slate-800 focus:border-teal-400 outline-none" />
+          </div>
+        </div>
+        {delta !== null && (
+          <div className={"rounded-xl border p-3 text-xs " + (delta < 0 ? "border-teal-200 bg-teal-50 text-teal-800" : delta > 0 ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-slate-50 text-slate-600")}>
+            <b>{delta < 0 ? "Melhora" : delta > 0 ? "Piora" : "Sem variação"}</b> de {absD.toFixed(1).replace(".", ",")} ponto(s) — tamanho de efeito <b>{mag}</b>.
+            <div className="mt-1 opacity-80">Referência (DP = 15): ≥ 3 pequeno · ≥ 7,5 médio · ≥ 12 grande.</div>
+          </div>
+        )}
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          <p className="mb-1"><b>Faixas:</b> 0–5 nenhuma · 5,1–20 muito leve · 20,1–35 leve · 35,1–50 moderada · 50,1–65 grave · 65,1–80 muito grave · 80,1–95 gravíssima · 95,1–100 extrema.</p>
+          <p>Escala 4D (dias, medicação, dor, incapacidade) de Pasqualetti et al., <i>Cephalalgia</i> 2025. Os pesos vêm das preferências de pacientes e especialistas.</p>
+        </div>
+        <CopyBlock text={fourDText} ok={ok4} onCopy={() => fire4(fourDText)} onReset={() => { setNrs(0); setPrev(""); }} />
+      </section>
+
+      {/* Perfil mensal */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">Perfil mensal de cefaleia</h2>
+        <div className="grid grid-cols-4 gap-2">
+          <ResultBar title="Cefaleia" value={`${p.cef}`} suffix="d" tone={p.cef >= 15 ? "amber" : "slate"} compact />
+          <ResultBar title="Enxaqueca" value={`${p.enx}`} suffix="d" tone={p.enx >= 8 ? "amber" : "slate"} compact />
+          <ResultBar title="Med. (dias)" value={`${p.med}`} suffix="d" tone={moh ? "red" : "slate"} compact />
+          <ResultBar title="Med. (doses)" value={`${p.doses}`} tone="slate" compact />
+        </div>
+        <div className="space-y-2">
+          <NumRow label="Dias de cefaleia por mês" value={p.cef} onChange={(v) => setPv("cef", v)} max={31} suffix="dias" />
+          <NumRow label="Dias com características de enxaqueca/mês" hint="dimensão de dias do escore 4D (MMD)" value={p.enx} onChange={(v) => setPv("enx", v)} max={31} suffix="dias" />
+          <NumRow label="Dias de uso de medicação aguda/mês" hint="para o critério de uso excessivo" value={p.med} onChange={(v) => setPv("med", v)} max={31} suffix="dias" />
+          <NumRow label="Doses de medicação aguda por mês" hint="nº total de comprimidos/doses — dimensão de medicação do escore 4D (MAM)" value={p.doses} onChange={(v) => setPv("doses", v)} max={90} suffix="doses" />
+        </div>
+        {(chronic || moh) && (
+          <div className="space-y-2">
+            {chronic && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                <b>Enxaqueca crônica:</b> frequência compatível (≥ 15 dias de cefaleia/mês por &gt; 3 meses, sendo ≥ 8 com características de enxaqueca).
+              </div>
+            )}
+            {moh && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
+                <b>Possível uso excessivo de medicação:</b> ≥ 10 dias/mês de triptanos, ergotamínicos, opioides ou combinações; ≥ 15 dias/mês para analgésicos simples.
+              </div>
+            )}
+          </div>
+        )}
+        <CopyBlock text={profText} ok={ok2} onCopy={() => fire2(profText)} onReset={() => setP({ cef: 0, enx: 0, med: 0, doses: 0 })} />
+      </section>
+
       {/* MIDAS */}
       <section className="space-y-3">
         <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">MIDAS — incapacidade (últimos 3 meses)</h2>
@@ -506,39 +627,9 @@ function Migraine() {
         <div className="mt-1 mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Informações adicionais (não pontuam)</div>
         <div className="space-y-2">
           <NumRow label="Dias com dor de cabeça (3 meses)" value={m.a} onChange={(v) => setMv("a", v)} max={92} suffix="dias" />
-          <NumRow label="Intensidade média da dor" hint="escala de 0 a 10" value={m.b} onChange={(v) => setMv("b", v)} max={10} suffix="/10" />
+          <NumRow label="Intensidade média da dor" hint="0 a 10 — item informativo do MIDAS, não entra no escore 4D" value={m.b} onChange={(v) => setMv("b", v)} max={10} suffix="/10" />
         </div>
         <CopyBlock text={midasText} ok={ok1} onCopy={() => fire1(midasText)} onReset={() => setM({ q1: 0, q2: 0, q3: 0, q4: 0, q5: 0, a: 0, b: 0 })} />
-      </section>
-
-      {/* Perfil mensal */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">Perfil mensal de cefaleia</h2>
-        <div className="grid grid-cols-3 gap-2">
-          <ResultBar title="Cefaleia" value={`${p.cef}`} suffix="d" tone={p.cef >= 15 ? "amber" : "slate"} compact />
-          <ResultBar title="Enxaqueca" value={`${p.enx}`} suffix="d" tone={p.enx >= 8 ? "amber" : "slate"} compact />
-          <ResultBar title="Medicação" value={`${p.med}`} suffix="d" tone={moh ? "red" : "slate"} compact />
-        </div>
-        <div className="space-y-2">
-          <NumRow label="Dias de cefaleia por mês" value={p.cef} onChange={(v) => setPv("cef", v)} max={31} suffix="dias" />
-          <NumRow label="Dias com características de enxaqueca/mês" value={p.enx} onChange={(v) => setPv("enx", v)} max={31} suffix="dias" />
-          <NumRow label="Dias de uso de medicação aguda/mês" value={p.med} onChange={(v) => setPv("med", v)} max={31} suffix="dias" />
-        </div>
-        {(chronic || moh) && (
-          <div className="space-y-2">
-            {chronic && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                <b>Enxaqueca crônica:</b> frequência compatível (≥ 15 dias de cefaleia/mês por &gt; 3 meses, sendo ≥ 8 com características de enxaqueca).
-              </div>
-            )}
-            {moh && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-800">
-                <b>Possível uso excessivo de medicação:</b> ≥ 10 dias/mês de triptanos, ergotamínicos, opioides ou combinações; ≥ 15 dias/mês para analgésicos simples.
-              </div>
-            )}
-          </div>
-        )}
-        <CopyBlock text={profText} ok={ok2} onCopy={() => fire2(profText)} onReset={() => setP({ cef: 0, enx: 0, med: 0 })} />
       </section>
     </div>
   );
@@ -696,6 +787,185 @@ function GDS15() {
   );
 }
 
+/* ================= FIBROMIALGIA (FiRST + critérios ACR 2016) ================= */
+
+/* FiRST — Perrot, Bouhassira & Fermanian, Pain 2010;150:250-6.
+   Tradução livre dos 6 itens originais; a versão brasileira validada
+   (Jesus et al., Adv Rheumatol 2022) não publica o texto dos itens. */
+const firstItems = [
+  "Sinto dor por todo o corpo.",
+  "Minha dor vem acompanhada de uma fadiga geral contínua e muito desagradável.",
+  "Minha dor é como queimação, choques elétricos ou cãibras.",
+  "Minha dor vem acompanhada de outras sensações incomuns pelo corpo, como formigamento, agulhadas ou adormecimento.",
+  "Minha dor vem acompanhada de outros problemas de saúde, como problemas digestivos, problemas urinários, dores de cabeça ou pernas inquietas.",
+  "Minha dor tem impacto importante na minha vida, em especial no sono e na capacidade de concentração, e me deixa mais lento(a) de modo geral.",
+];
+
+/* Critérios ACR 2016 (revisão dos critérios 2010/2011) — Wolfe et al., Semin Arthritis Rheum 2016;46:319-29.
+   Sítios em itálico no original (mandíbulas, tórax, abdome) contam no WPI mas não na contagem de regiões. */
+const wpiRegions = [
+  { key: "r1", label: "Região superior esquerda (1)", sites: [["Mandíbula E", true], ["Cintura escapular E", false], ["Braço E", false], ["Antebraço E", false]] },
+  { key: "r2", label: "Região superior direita (2)", sites: [["Mandíbula D", true], ["Cintura escapular D", false], ["Braço D", false], ["Antebraço D", false]] },
+  { key: "r3", label: "Região inferior esquerda (3)", sites: [["Quadril E (glúteo/trocânter)", false], ["Coxa E", false], ["Perna E", false]] },
+  { key: "r4", label: "Região inferior direita (4)", sites: [["Quadril D (glúteo/trocânter)", false], ["Coxa D", false], ["Perna D", false]] },
+  { key: "r5", label: "Região axial (5)", sites: [["Pescoço", false], ["Dorso superior", false], ["Dorso inferior (lombar)", false], ["Tórax", true], ["Abdome", true]] },
+];
+const sssAnchors = [
+  "Sem problema",
+  "Leve: discreto ou intermitente",
+  "Moderado: problema considerável, frequentemente presente",
+  "Grave: contínuo, intenso, perturba a vida",
+];
+const sssMain = [
+  { key: "fad", label: "Fadiga" },
+  { key: "sono", label: "Acordar cansado (sono não restaurador)" },
+  { key: "cog", label: "Sintomas cognitivos" },
+];
+const sssExtra = [
+  { key: "cef", label: "Dor de cabeça" },
+  { key: "abd", label: "Dor ou cólica no baixo ventre" },
+  { key: "dep", label: "Depressão" },
+];
+const psdBands = [[3, "Nenhum"], [7, "Leve"], [11, "Moderado"], [19, "Grave"], [Infinity, "Muito grave"]];
+
+function Fibro() {
+  const [fi, setFi] = useState({});
+  const [sites, setSites] = useState({});
+  const [sss, setSss] = useState({ fad: 0, sono: 0, cog: 0 });
+  const [extra, setExtra] = useState({});
+  const [tres, setTres] = useState(false);
+  const [okF, fireF] = useCopyOk();
+  const [okA, fireA] = useCopyOk();
+
+  /* FiRST */
+  const firstScore = firstItems.reduce((a, _, i) => a + (fi[i] ? 1 : 0), 0);
+  const firstPos = firstScore >= 5;
+  const firstNums = firstItems.map((_, i) => (fi[i] ? i + 1 : null)).filter(Boolean);
+  const firstText = `FiRST (triagem de fibromialgia): ${firstScore}/6 — triagem ${firstPos ? "positiva" : "negativa"} (ponto de corte ≥ 5). ` +
+    `Itens positivos: ${firstNums.length ? firstNums.join(", ") : "nenhum"}.`;
+
+  /* ACR 2016 */
+  const wpi = wpiRegions.reduce((a, r) => a + r.sites.filter((_, i) => sites[`${r.key}-${i}`]).length, 0);
+  const regions = wpiRegions.filter((r) => r.sites.some((s, i) => !s[1] && sites[`${r.key}-${i}`])).length;
+  const sssScore = sss.fad + sss.sono + sss.cog + sssExtra.reduce((a, e) => a + (extra[e.key] ? 1 : 0), 0);
+  const c1 = (wpi >= 7 && sssScore >= 5) || (wpi >= 4 && wpi <= 6 && sssScore >= 9);
+  const c2 = regions >= 4;
+  const met = c1 && c2 && tres;
+  const psd = wpi + sssScore;
+  const psdLabel = psdBands.find(([lim]) => psd <= lim)[1];
+  const acrText = `Critérios ACR 2016 para fibromialgia: ${met ? "preenchidos" : "não preenchidos"}. ` +
+    `WPI ${wpi}/19, SSS ${sssScore}/12, ${regions}/5 regiões com dor, sintomas por ≥ 3 meses: ${tres ? "sim" : "não"}. ` +
+    `Critério 1 (WPI ≥ 7 e SSS ≥ 5, ou WPI 4–6 e SSS ≥ 9): ${c1 ? "sim" : "não"}; critério 2 (dor em 4 de 5 regiões): ${c2 ? "sim" : "não"}. ` +
+    `Escore de distresse polissintomático (WPI + SSS): ${psd}/31 — ${psdLabel.toLowerCase()}.`;
+
+  return (
+    <div className="space-y-5">
+      {/* FiRST */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">FiRST — triagem rápida</h2>
+        <ResultBar title={firstPos ? "Triagem positiva" : "Triagem negativa"} value={`${firstScore}`} suffix="/6"
+          tone={firstPos ? "amber" : "teal"} note={firstPos ? "≥ 5: fibromialgia provável — confirmar com os critérios ACR" : "Abaixo do corte de 5"} />
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          <p className="mb-1">Marque cada afirmação com que o paciente concorda. Cada "sim" vale 1 ponto; <b>≥ 5 indica fibromialgia provável</b>.</p>
+          <p>Destinado a quem já tem dor crônica difusa. É <b>triagem, não diagnóstico</b> (sensibilidade 90,5% e especificidade 85,7% no estudo original; 92,3% e 61,6% na versão brasileira online).</p>
+        </div>
+        <div className="space-y-2">
+          {firstItems.map((it, i) => (
+            <CheckChip key={i} checked={!!fi[i]} onToggle={() => setFi((p) => ({ ...p, [i]: !p[i] }))}>{it}</CheckChip>
+          ))}
+        </div>
+        <CopyBlock text={firstText} ok={okF} onCopy={() => fireF(firstText)} onReset={() => setFi({})} />
+      </section>
+
+      {/* ACR 2016 */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">Critérios ACR 2016 — diagnóstico</h2>
+        <div className={"rounded-2xl p-4 text-white shadow-sm bg-gradient-to-br " + (met ? "from-amber-500 to-amber-600" : "from-slate-500 to-slate-600")}>
+          <div className="text-xs uppercase tracking-wide opacity-80">Critérios ACR 2016</div>
+          <div className="text-xl font-bold leading-tight">{met ? "Critérios preenchidos" : "Critérios não preenchidos"}</div>
+          <div className="text-xs opacity-90 mt-1.5 space-y-0.5">
+            <div>{c1 ? "✓" : "✗"} 1. WPI ≥ 7 e SSS ≥ 5, ou WPI 4–6 e SSS ≥ 9</div>
+            <div>{c2 ? "✓" : "✗"} 2. Dor generalizada: 4 de 5 regiões</div>
+            <div>{tres ? "✓" : "✗"} 3. Sintomas presentes por ≥ 3 meses</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <ResultBar title="WPI" value={`${wpi}`} suffix="/19" tone="slate" compact />
+          <ResultBar title="SSS" value={`${sssScore}`} suffix="/12" tone="slate" compact />
+          <ResultBar title="Regiões" value={`${regions}`} suffix="/5" tone={c2 ? "amber" : "slate"} compact />
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          O diagnóstico é válido <b>independentemente de outros diagnósticos</b> — não é preciso excluir outras condições que expliquem os sintomas. Tanto o WPI como o SSS se referem à <b>última semana</b>.
+        </div>
+
+        <div>
+          <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Índice de dor generalizada (WPI)</div>
+          <p className="text-xs text-slate-400 mb-2">Na última semana, onde houve dor? Itens marcados com * contam no WPI, mas não na contagem de regiões.</p>
+          <div className="space-y-2">
+            {wpiRegions.map((r) => {
+              const n = r.sites.filter((_, i) => sites[`${r.key}-${i}`]).length;
+              const counts = r.sites.some((s, i) => !s[1] && sites[`${r.key}-${i}`]);
+              return (
+                <div key={r.key} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between mb-2 gap-2">
+                    <span className="font-semibold text-slate-800 text-sm">{r.label}</span>
+                    <Badge tone={counts ? "teal" : "slate"}>{n}/{r.sites.length}{counts ? " · conta" : ""}</Badge>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {r.sites.map(([label, excl], i) => (
+                      <CheckChip key={i} checked={!!sites[`${r.key}-${i}`]}
+                        onToggle={() => setSites((p) => ({ ...p, [`${r.key}-${i}`]: !p[`${r.key}-${i}`] }))}>
+                        {label}{excl ? " *" : ""}
+                      </CheckChip>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Escala de gravidade de sintomas (SSS)</div>
+          <p className="text-xs text-slate-400 mb-2">Gravidade na última semana, de 0 a 3.</p>
+          <div className="space-y-2">
+            {sssMain.map((s) => (
+              <ScoredItem key={s.key} label={s.label} bold value={sss[s.key]} options={[0, 1, 2, 3]} desc={sssAnchors}
+                onChange={(v) => setSss((p) => ({ ...p, [s.key]: v }))} />
+            ))}
+          </div>
+          <p className="text-xs text-slate-400 mt-2 mb-2">Na última semana, foi incomodado por algum destes? (1 ponto cada)</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {sssExtra.map((e) => (
+              <CheckChip key={e.key} checked={!!extra[e.key]} onToggle={() => setExtra((p) => ({ ...p, [e.key]: !p[e.key] }))}>
+                {e.label}
+              </CheckChip>
+            ))}
+          </div>
+        </div>
+
+        <CheckChip checked={tres} onToggle={() => setTres((t) => !t)}>
+          Sintomas presentes em nível semelhante por pelo menos 3 meses
+        </CheckChip>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-800">Distresse polissintomático (WPI + SSS)</div>
+              <div className="text-xs text-slate-400">Escala de gravidade — não faz parte dos critérios diagnósticos</div>
+            </div>
+            <Badge>{psd}/31 · {psdLabel}</Badge>
+          </div>
+          <p className="text-[11px] text-slate-400 mt-2">Faixas: 0–3 nenhum · 4–7 leve · 8–11 moderado · 12–19 grave · 20–31 muito grave.</p>
+        </div>
+
+        <CopyBlock text={acrText} ok={okA} onCopy={() => fireA(acrText)}
+          onReset={() => { setSites({}); setSss({ fad: 0, sono: 0, cog: 0 }); setExtra({}); setTres(false); }} />
+      </section>
+    </div>
+  );
+}
+
 /* ================= APP ================= */
 const tabs = [
   { id: "meem", label: "MEEM", icon: Brain, comp: MEEM },
@@ -703,6 +973,7 @@ const tabs = [
   { id: "cdr", label: "CDR", icon: ClipboardList, comp: CDR },
   { id: "mgadl", label: "MG-ADL", icon: Stethoscope, comp: MGADL },
   { id: "enxaqueca", label: "Enxaqueca", icon: Zap, comp: Migraine },
+  { id: "fibro", label: "Fibromialgia", icon: Flame, comp: Fibro },
   { id: "phq9", label: "PHQ-9", icon: CloudRain, comp: PHQ9 },
   { id: "gad7", label: "GAD-7", icon: HeartPulse, comp: GAD7 },
   { id: "gds15", label: "GDS-15", icon: Users, comp: GDS15 },
@@ -738,6 +1009,8 @@ export default function App() {
           Ferramenta de apoio à pontuação — não substitui o julgamento clínico nem as escalas oficiais.
           As descrições são resumos próprios. O UPDRS segue a estrutura clássica de 108 pontos.
           O MDS-UPDRS é protegido por direitos autorais (MDS) — uso institucional pode exigir permissão.
+          Escore 4D: Pasqualetti et al., <i>Cephalalgia</i> 2025;45(12). FiRST: Perrot et al., <i>Pain</i> 2010;150:250-6.
+          Critérios de fibromialgia: revisão de 2016 de Wolfe et al., <i>Semin Arthritis Rheum</i> 2016;46:319-29.
         </footer>
       </div>
     </div>
