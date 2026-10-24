@@ -804,12 +804,90 @@ const firstItems = [
 /* Critérios ACR 2016 (revisão dos critérios 2010/2011) — Wolfe et al., Semin Arthritis Rheum 2016;46:319-29.
    Sítios em itálico no original (mandíbulas, tórax, abdome) contam no WPI mas não na contagem de regiões. */
 const wpiRegions = [
-  { key: "r1", label: "Região superior esquerda (1)", sites: [["Mandíbula E", true], ["Cintura escapular E", false], ["Braço E", false], ["Antebraço E", false]] },
-  { key: "r2", label: "Região superior direita (2)", sites: [["Mandíbula D", true], ["Cintura escapular D", false], ["Braço D", false], ["Antebraço D", false]] },
-  { key: "r3", label: "Região inferior esquerda (3)", sites: [["Quadril E (glúteo/trocânter)", false], ["Coxa E", false], ["Perna E", false]] },
-  { key: "r4", label: "Região inferior direita (4)", sites: [["Quadril D (glúteo/trocânter)", false], ["Coxa D", false], ["Perna D", false]] },
-  { key: "r5", label: "Região axial (5)", sites: [["Pescoço", false], ["Dorso superior", false], ["Dorso inferior (lombar)", false], ["Tórax", true], ["Abdome", true]] },
+  { key: "r1", short: "Sup. E", label: "Região superior esquerda (1)", sites: [["Mandíbula E", true], ["Cintura escapular E", false], ["Braço E", false], ["Antebraço E", false]] },
+  { key: "r2", short: "Sup. D", label: "Região superior direita (2)", sites: [["Mandíbula D", true], ["Cintura escapular D", false], ["Braço D", false], ["Antebraço D", false]] },
+  { key: "r3", short: "Inf. E", label: "Região inferior esquerda (3)", sites: [["Quadril E (glúteo/trocânter)", false], ["Coxa E", false], ["Perna E", false]] },
+  { key: "r4", short: "Inf. D", label: "Região inferior direita (4)", sites: [["Quadril D (glúteo/trocânter)", false], ["Coxa D", false], ["Perna D", false]] },
+  { key: "r5", short: "Axial", label: "Região axial (5)", sites: [["Pescoço", false], ["Dorso superior", false], ["Dorso inferior (lombar)", false], ["Tórax", true], ["Abdome", true]] },
 ];
+
+/* ---- mapa corporal clicável do WPI ----
+   Lados são sempre os do PACIENTE: na vista de frente, o lado direito (D)
+   fica à esquerda de quem olha; nas costas, o inverso.
+   excl = sítio que conta no WPI mas não na contagem de regiões. */
+const ZONES_FRONT = [
+  { id: "r2-0", lab: "Mandíbula D", excl: true, d: "M81,38 L100,38 L100,58 Q87,56 81,47 Z" },
+  { id: "r1-0", lab: "Mandíbula E", excl: true, d: "M119,38 L100,38 L100,58 Q113,56 119,47 Z" },
+  { id: "r5-0", lab: "Pescoço", r: [90, 52, 20, 16, 4] },
+  { id: "r2-1", lab: "Cintura escapular D", d: "M50,72 Q64,64 80,70 L80,100 L54,100 Q46,86 50,72 Z" },
+  { id: "r1-1", lab: "Cintura escapular E", d: "M150,72 Q136,64 120,70 L120,100 L146,100 Q154,86 150,72 Z" },
+  { id: "r5-3", lab: "Tórax", excl: true, torso: true, d: "M80,70 L120,70 L120,124 L80,124 Z" },
+  { id: "r5-4", lab: "Abdome", excl: true, torso: true, d: "M80,124 L120,124 L118,172 L82,172 Z" },
+  { id: "r2-2", lab: "Braço D", r: [44, 102, 28, 52, 13] },
+  { id: "r1-2", lab: "Braço E", r: [128, 102, 28, 52, 13] },
+  { id: "r2-3", lab: "Antebraço D", r: [42, 157, 26, 50, 12] },
+  { id: "r1-3", lab: "Antebraço E", r: [132, 157, 26, 50, 12] },
+  { id: "r4-0", lab: "Quadril D", d: "M82,172 L100,172 L100,208 L78,208 Q75,188 82,172 Z" },
+  { id: "r3-0", lab: "Quadril E", d: "M118,172 L100,172 L100,208 L122,208 Q125,188 118,172 Z" },
+  { id: "r4-1", lab: "Coxa D", r: [77, 210, 22, 70, 11] },
+  { id: "r3-1", lab: "Coxa E", r: [101, 210, 22, 70, 11] },
+  { id: "r4-2", lab: "Perna D", r: [79, 282, 19, 78, 9] },
+  { id: "r3-2", lab: "Perna E", r: [102, 282, 19, 78, 9] },
+];
+const ZONES_BACK = [
+  { id: "r5-1", lab: "Dorso superior", d: "M80,70 L120,70 L120,124 L80,124 Z" },
+  { id: "r5-2", lab: "Dorso inferior (lombar)", d: "M80,124 L120,124 L118,172 L82,172 Z" },
+];
+/* partes não clicáveis, só para dar forma ao corpo */
+const SIL = [
+  [100, 30, 22, 25], [55, 215, 11, 12], [145, 215, 11, 12], [88, 366, 11, 8], [112, 366, 11, 8],
+];
+
+function shapeOf(z, props) {
+  return z.d ? <path d={z.d} {...props} /> : <rect x={z.r[0]} y={z.r[1]} width={z.r[2]} height={z.r[3]} rx={z.r[4]} {...props} />;
+}
+const inert = { fill: "#f1f5f9", stroke: "#e2e8f0", strokeWidth: 1.2 };
+
+function BodyFig({ caption, zones, extraInert = [], sites, toggle, width, sideLeft, sideRight }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-2">
+      <div className="text-xs font-semibold text-slate-600 text-center mb-1">{caption}</div>
+      <svg viewBox="0 0 200 380" className={"w-full h-auto mx-auto " + width} role="img" aria-label={`Mapa corporal — ${caption}`}>
+        {SIL.map(([cx, cy, rx, ry], i) => <ellipse key={i} cx={cx} cy={cy} rx={rx} ry={ry} {...inert} />)}
+        {extraInert.map((z) => <g key={z.id}>{shapeOf(z, inert)}</g>)}
+        {zones.map((z) => {
+          const on = !!sites[z.id];
+          return (
+            <g key={z.id} onClick={() => toggle(z.id)} className="cursor-pointer">
+              <title>{z.lab}</title>
+              {shapeOf(z, {
+                fill: on ? "#0d9488" : "#e2e8f0",
+                stroke: on ? "#0f766e" : "#94a3b8",
+                strokeWidth: 1.2,
+                strokeDasharray: z.excl ? "3 2" : undefined,
+              })}
+            </g>
+          );
+        })}
+        <text x="14" y="96" fontSize="13" fontWeight="700" fill="#94a3b8">{sideLeft}</text>
+        <text x="178" y="96" fontSize="13" fontWeight="700" fill="#94a3b8">{sideRight}</text>
+      </svg>
+    </div>
+  );
+}
+
+function BodyMap({ sites, toggle }) {
+  return (
+    <div className="grid grid-cols-3 gap-2 items-start">
+      <div className="col-span-2">
+        <BodyFig caption="Frente" zones={ZONES_FRONT} sites={sites} toggle={toggle}
+          width="max-w-[240px]" sideLeft="D" sideRight="E" />
+      </div>
+      <BodyFig caption="Costas" zones={ZONES_BACK} extraInert={ZONES_FRONT.filter((z) => !z.torso)}
+        sites={sites} toggle={toggle} width="max-w-[130px]" sideLeft="E" sideRight="D" />
+    </div>
+  );
+}
 const sssAnchors = [
   "Sem problema",
   "Leve: discreto ou intermitente",
@@ -834,8 +912,10 @@ function Fibro() {
   const [sss, setSss] = useState({ fad: 0, sono: 0, cog: 0 });
   const [extra, setExtra] = useState({});
   const [tres, setTres] = useState(false);
+  const [modo, setModo] = useState("mapa");
   const [okF, fireF] = useCopyOk();
   const [okA, fireA] = useCopyOk();
+  const toggleSite = (k) => setSites((p) => ({ ...p, [k]: !p[k] }));
 
   /* FiRST */
   const firstScore = firstItems.reduce((a, _, i) => a + (fi[i] ? 1 : 0), 0);
@@ -899,30 +979,65 @@ function Fibro() {
         </div>
 
         <div>
-          <div className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Índice de dor generalizada (WPI)</div>
-          <p className="text-xs text-slate-400 mb-2">Na última semana, onde houve dor? Itens marcados com * contam no WPI, mas não na contagem de regiões.</p>
-          <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="text-xs font-bold uppercase tracking-wide text-slate-500">Índice de dor generalizada (WPI)</div>
+            <div className="flex gap-1">
+              {[["mapa", "Mapa"], ["lista", "Lista"]].map(([k, lb]) => (
+                <button key={k} onClick={() => setModo(k)}
+                  className={"px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors " +
+                    (modo === k ? "bg-teal-600 border-teal-600 text-white" : "bg-white border-slate-200 text-slate-500 hover:border-teal-300")}>
+                  {lb}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mb-2">Na última semana, onde houve dor? Toque em cada parte com dor.</p>
+
+          {modo === "mapa" ? (
+            <div className="space-y-2">
+              <BodyMap sites={sites} toggle={toggleSite} />
+              <p className="text-[11px] text-slate-400">
+                <b>D</b> = direita do paciente, <b>E</b> = esquerda (já invertidas na vista de costas).
+                O contorno tracejado marca mandíbulas, tórax e abdome, que contam no WPI mas não na contagem de regiões.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {wpiRegions.map((r) => {
+                const n = r.sites.filter((_, i) => sites[`${r.key}-${i}`]).length;
+                const counts = r.sites.some((s, i) => !s[1] && sites[`${r.key}-${i}`]);
+                return (
+                  <div key={r.key} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex items-center justify-between mb-2 gap-2">
+                      <span className="font-semibold text-slate-800 text-sm">{r.label}</span>
+                      <Badge tone={counts ? "teal" : "slate"}>{n}/{r.sites.length}{counts ? " · conta" : ""}</Badge>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {r.sites.map(([label, excl], i) => (
+                        <CheckChip key={i} checked={!!sites[`${r.key}-${i}`]} onToggle={() => toggleSite(`${r.key}-${i}`)}>
+                          {label}{excl ? " *" : ""}
+                        </CheckChip>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="grid grid-cols-5 gap-1.5 mt-2">
             {wpiRegions.map((r) => {
               const n = r.sites.filter((_, i) => sites[`${r.key}-${i}`]).length;
               const counts = r.sites.some((s, i) => !s[1] && sites[`${r.key}-${i}`]);
               return (
-                <div key={r.key} className="rounded-xl border border-slate-200 bg-white p-3">
-                  <div className="flex items-center justify-between mb-2 gap-2">
-                    <span className="font-semibold text-slate-800 text-sm">{r.label}</span>
-                    <Badge tone={counts ? "teal" : "slate"}>{n}/{r.sites.length}{counts ? " · conta" : ""}</Badge>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {r.sites.map(([label, excl], i) => (
-                      <CheckChip key={i} checked={!!sites[`${r.key}-${i}`]}
-                        onToggle={() => setSites((p) => ({ ...p, [`${r.key}-${i}`]: !p[`${r.key}-${i}`] }))}>
-                        {label}{excl ? " *" : ""}
-                      </CheckChip>
-                    ))}
-                  </div>
+                <div key={r.key} className={"rounded-lg border px-1 py-1.5 text-center " + (counts ? "border-teal-300 bg-teal-50" : "border-slate-200 bg-white")}>
+                  <div className="text-[10px] leading-tight text-slate-500">{r.short}</div>
+                  <div className={"text-sm font-bold leading-tight " + (counts ? "text-teal-700" : "text-slate-400")}>{n}</div>
                 </div>
               );
             })}
           </div>
+          <p className="text-[11px] text-slate-400 mt-1">Sítios marcados por região · destacadas são as que contam para o critério de 4 de 5 regiões.</p>
         </div>
 
         <div>
