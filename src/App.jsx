@@ -1114,6 +1114,14 @@ const bbrcEsc = [
   { lab: "8 anos ou mais", flu: 12 },
 ];
 const n0a10 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+/* checklist objetivo de 5 itens — 1 ponto cada */
+const relogioItens = [
+  "Desenhou e fechou o círculo",
+  "Colocou todos os números",
+  "Números com distribuição visuoespacial correta",
+  "Colocou os dois ponteiros (hora menor, minutos maior)",
+  "Marcou a hora corretamente",
+];
 const shulman = [
   "Não representou o relógio",
   "Representação gravemente desorganizada",
@@ -1208,7 +1216,10 @@ function BBRC() {
   const [intr, setIntr] = useState(0);
   const [perc, setPerc] = useState(null);
   const [nom, setNom] = useState(null);
+  const [relModo, setRelModo] = useState("shulman");
   const [rel, setRel] = useState(null);
+  const [relItens, setRelItens] = useState({});
+  const [relFeito, setRelFeito] = useState(false);
   const [flu, setFlu] = useState("");
   const [ok, fire] = useCopyOk();
 
@@ -1227,6 +1238,11 @@ function BBRC() {
   const recBruto = conta("rec");
   const recFinal = recBruto - intr;
 
+  /* relógio: Shulman 0–5 ou checklist de 5 itens — ambos chegam ao mesmo escore */
+  const relCount = relogioItens.reduce((a, _, i) => a + (relItens[i] ? 1 : 0), 0);
+  const relAplic = relModo === "shulman" ? rel !== null : relCount > 0 || relFeito;
+  const relVal = !relAplic ? null : relModo === "shulman" ? rel : relCount;
+
   const valorDe = (fk) => {
     if (!aplicada(fk)) return null;
     return fk === "rec" ? recFinal : conta(fk);
@@ -1236,7 +1252,7 @@ function BBRC() {
   const subs = [
     ...bbrcFases.slice(0, 3).map((f) => ({ lab: f.lab, v: valorDe(f.k), cut: f.cut, uni: "/10" })),
     { lab: "Fluência verbal", v: fluVal, cut: fluCut, uni: " animais" },
-    { lab: "Desenho do relógio", v: rel, cut: 2, uni: "/5" },
+    { lab: "Desenho do relógio", v: relVal, cut: 2, uni: "/5" },
     ...bbrcFases.slice(3).map((f) => ({ lab: f.lab, v: valorDe(f.k), cut: f.cut, uni: "/10" })),
   ].map((x) => ({ ...x, resp: x.v !== null, alt: x.v !== null && x.v <= x.cut }));
   const respondidos = subs.filter((x) => x.resp).length;
@@ -1252,7 +1268,7 @@ function BBRC() {
     perc, nom,
     inc: valorDe("inc"), ime: valorDe("ime"), apr: valorDe("apr"),
     tar: valorDe("tar"), rec: valorDe("rec"),
-    flu: fluVal, fluCut, rel, alterados, faltam,
+    flu: fluVal, fluCut, rel: relVal, alterados, faltam,
   });
 
   const mostra = (v, uni) => (v === null ? "não aplicado" : `${v}${uni}`);
@@ -1265,7 +1281,8 @@ function BBRC() {
 
   const zerar = () => {
     setGrid({}); setFeita({}); setIntr(0);
-    setPerc(null); setNom(null); setRel(null); setFlu("");
+    setPerc(null); setNom(null); setFlu("");
+    setRel(null); setRelItens({}); setRelFeito(false);
   };
 
   return (
@@ -1411,11 +1428,61 @@ function BBRC() {
             <span className="text-xs text-slate-400">animais</span>
           </div>
         </div>
-        <ScoredItem label="Desenho do relógio — critérios de Shulman" bold value={rel} options={[0, 1, 2, 3, 4, 5]}
-          desc={shulman} onChange={setRel} />
+        <div className={"rounded-xl border bg-white p-3 " + (relVal !== null && relVal <= 2 ? "border-amber-300" : "border-slate-200")}>
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <span className="text-sm font-semibold text-slate-800">Desenho do relógio</span>
+            <div className="flex gap-1 shrink-0">
+              {[["shulman", "Shulman"], ["lista", "Checklist"]].map(([k, lb]) => (
+                <button key={k} onClick={() => setRelModo(k)}
+                  className={"px-2 py-1 rounded-lg text-[11px] font-semibold border transition-colors " +
+                    (relModo === k ? "bg-teal-600 border-teal-600 text-white" : "bg-white border-slate-200 text-slate-500 hover:border-teal-300")}>
+                  {lb}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-slate-400 mb-2">
+            “Desenhe um relógio redondo e grande, coloque todos os números e marque 11 horas e 10 minutos.”
+          </p>
+
+          {relModo === "shulman" ? (
+            <>
+              <Picker value={rel} onChange={setRel} options={[0, 1, 2, 3, 4, 5]} labels={shulman} />
+              {rel !== null && <div className="text-xs text-teal-700 mt-1.5"><b>{rel}</b> — {shulman[rel]}</div>}
+              <div className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+                {shulman.map((d, i) => (
+                  <div key={i} className="text-[11px] text-slate-500 flex gap-2">
+                    <span className="font-bold text-slate-600 w-4 shrink-0">{i}</span><span>{d}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {relogioItens.map((it, i) => (
+                  <CheckChip key={i} checked={!!relItens[i]}
+                    onToggle={() => { setRelItens((p) => ({ ...p, [i]: !p[i] })); setRelFeito(true); }}>
+                    {it}
+                  </CheckChip>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-100">
+                <span className="text-xs text-slate-500">1 ponto por item</span>
+                <button onClick={() => setRelFeito((v) => !v)} disabled={relCount > 0}
+                  title={relAplic ? "Aplicado" : "Marcar como aplicado com 0 pontos"}>
+                  <Badge tone={!relAplic ? "slate" : relVal <= 2 ? "amber" : "teal"}>
+                    {relAplic ? `${relVal}/5` : "não aplicado"}
+                  </Badge>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
         <p className="text-[11px] text-slate-400">
-          “Desenhe um relógio redondo e grande, coloque todos os números e marque 11 horas e 10 minutos.”
-          Considerado alterado com escore ≤ 2 — é o corte menos consensual da bateria.
+          Entra como alterado com escore ≤ 2, pelo critério adotado na bateria — é o corte menos consensual do conjunto.
+          O checklist original considera normal apenas 5/5, então use-o como leitura qualitativa à parte.
+          Com 0 ponto no checklist, toque no selo para marcá-lo como aplicado.
         </p>
       </section>
 
