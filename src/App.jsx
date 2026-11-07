@@ -1137,6 +1137,70 @@ const bbrcFases = [
     hint: "Mostre a prancha de 20 figuras e pergunte quais já tinham sido mostradas. Registre as intrusões abaixo." },
 ];
 
+/* Lê o padrão dos achados: eixo predominante, armazenamento x recuperação e curva de aprendizado. */
+function bbrcInterp({ perc, nom, inc, ime, apr, tar, rec, flu, fluCut, rel, alterados, faltam }) {
+  const alt = (v, c) => v !== null && v <= c;
+  const incA = alt(inc, 4), imeA = alt(ime, 6), aprA = alt(apr, 6), tarA = alt(tar, 5), recA = alt(rec, 7);
+  const fluA = alt(flu, fluCut), relA = alt(rel, 2);
+  const memV = [inc, ime, apr, tar, rec].filter((v) => v !== null).length;
+  const memA = [incA, imeA, aprA, tarA, recA].filter(Boolean).length;
+  const exeV = [flu, rel].filter((v) => v !== null).length;
+  const exeA = [fluA, relA].filter(Boolean).length;
+  const f = [];
+
+  if (memV === 0 && exeV === 0) return ["Nenhum subteste aplicado ainda."];
+
+  /* resultado geral */
+  if (alterados === 0 && faltam === 0)
+    f.push("Nenhum dos sete subtestes ficou no ponto de corte ou abaixo dele: desempenho dentro do esperado para a escolaridade informada.");
+  else if (alterados === 0)
+    f.push(`Nenhum subteste aplicado ficou alterado até aqui, mas ${faltam} ainda não foi aplicado.`);
+  else
+    f.push(`${alterados} de 7 subtestes alterados${faltam ? `, com ${faltam} ainda por aplicar` : ""} — ` +
+      `${alterados <= 2 ? "achado que sugere possível comprometimento cognitivo leve" : "achado sugestivo de comprometimento cognitivo significativo"}.`);
+
+  /* eixo predominante */
+  if (memA > 0 && exeA === 0 && exeV > 0)
+    f.push("As alterações concentram-se na memória de figuras, com fluência verbal e desenho do relógio dentro do esperado.");
+  else if (exeA > 0 && memA === 0 && memV > 0)
+    f.push("As alterações concentram-se nas tarefas de interferência (fluência verbal e/ou relógio), com a memória de figuras preservada — padrão que aponta mais para disfunção executiva ou de linguagem do que para déficit amnéstico.");
+  else if (memA > 0 && exeA > 0) {
+    const pm = memA / memV, pe = exeA / exeV;
+    if (pm > pe) f.push("Há alteração nos dois eixos, com predomínio na memória de figuras.");
+    else if (pe > pm) f.push("Há alteração nos dois eixos, com predomínio nas tarefas de fluência e relógio.");
+    else f.push("As alterações distribuem-se de forma semelhante entre memória e tarefas de interferência, sugerindo comprometimento mais difuso.");
+  }
+
+  /* armazenamento x recuperação — a leitura mais útil da bateria */
+  if (tar !== null && rec !== null) {
+    if (tarA && recA)
+      f.push("Evocação tardia e reconhecimento alterados: o padrão aponta para falha de armazenamento/consolidação, que costuma acompanhar perfil amnéstico.");
+    else if (tarA && !recA)
+      f.push("Evocação tardia alterada com reconhecimento preservado: o material chegou a ser armazenado e a falha está na recuperação espontânea — mais frequente em disfunção executiva ou subcortical do que em perfil amnéstico típico.");
+    else if (!tarA && recA)
+      f.push("Reconhecimento alterado apesar de evocação tardia preservada: combinação incomum, que vale conferir quanto às intrusões e à aplicação.");
+    else
+      f.push("Evocação tardia e reconhecimento dentro do esperado.");
+  }
+
+  /* curva de aprendizado */
+  if (inc !== null && ime !== null && apr !== null) {
+    const ganho = apr - inc;
+    if (ganho >= 2) f.push(`Curva de aprendizado ascendente (${inc} → ${ime} → ${apr}), com ganho de ${ganho} figura(s) da evocação incidental ao aprendizado.`);
+    else if (ganho <= 0) f.push(`Curva de aprendizado plana (${inc} → ${ime} → ${apr}): a repetição não trouxe ganho, o que reforça dificuldade de aquisição.`);
+    else f.push(`Curva de aprendizado com ganho discreto (${inc} → ${ime} → ${apr}).`);
+  }
+
+  if (fluA) f.push(`Fluência verbal de ${flu} animais, no corte ou abaixo (≤ ${fluCut}) para a escolaridade informada — lembrando que a tarefa também sofre efeito de humor e de familiaridade.`);
+  if (relA) f.push(`Desenho do relógio com ${rel}/5, indicando prejuízo visuoconstrutivo e/ou de planejamento.`);
+
+  if ((perc !== null && perc <= 8) || (nom !== null && nom <= 8))
+    f.push("Percepção visual e/ou nomeação abaixo da referência de 9/10: além do possível componente de linguagem, isso limita a leitura dos escores de memória, já que figura não identificada dificilmente é evocada.");
+
+  f.push("Rastreio não fecha diagnóstico: interprete junto da história, da funcionalidade e do restante do exame.");
+  return f;
+}
+
 function BBRC() {
   const [esc, setEsc] = useState(1);
   const [grid, setGrid] = useState({});
@@ -1184,12 +1248,20 @@ function BBRC() {
   else if (alterados <= 2) { interp = "Sugestivo de possível comprometimento cognitivo leve"; tone = "amber"; }
   else { interp = "Sugestivo de comprometimento cognitivo significativo"; tone = "red"; }
 
+  const laudo = bbrcInterp({
+    perc, nom,
+    inc: valorDe("inc"), ime: valorDe("ime"), apr: valorDe("apr"),
+    tar: valorDe("tar"), rec: valorDe("rec"),
+    flu: fluVal, fluCut, rel, alterados, faltam,
+  });
+
   const mostra = (v, uni) => (v === null ? "não aplicado" : `${v}${uni}`);
   const text = `BBRC (Bateria Breve de Rastreio Cognitivo) — escolaridade: ${bbrcEsc[esc].lab.toLowerCase()}. ` +
     `Percepção visual ${mostra(perc, "/10")}, nomeação ${mostra(nom, "/10")}, ` +
     subs.map((x) => `${x.lab.toLowerCase()} ${mostra(x.v, x.uni)}`).join(", ") +
     (aplicada("rec") ? ` (${recBruto} alvos − ${intr} intrusões)` : "") +
-    `. Subtestes alterados: ${alterados} de 7${faltam ? ` (${faltam} ainda não aplicado(s))` : ""} — ${interp.toLowerCase()}.`;
+    `. Subtestes alterados: ${alterados} de 7${faltam ? ` (${faltam} ainda não aplicado(s))` : ""} — ${interp.toLowerCase()}. ` +
+    `Interpretação: ${laudo.join(" ")}`;
 
   const zerar = () => {
     setGrid({}); setFeita({}); setIntr(0);
@@ -1366,6 +1438,17 @@ function BBRC() {
           3 ou mais: comprometimento cognitivo significativo.
         </p>
       </div>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">Interpretação dos achados</h2>
+        <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 space-y-2">
+          {laudo.map((p, i) => (
+            <p key={i} className={"text-xs leading-relaxed " + (i === laudo.length - 1 && laudo.length > 1 ? "text-teal-600 italic pt-1 border-t border-teal-200" : "text-teal-900")}>
+              {p}
+            </p>
+          ))}
+        </div>
+      </section>
 
       <CopyBlock text={text} ok={ok} onCopy={() => fire(text)} onReset={zerar} />
     </div>
