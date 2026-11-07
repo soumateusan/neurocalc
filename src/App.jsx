@@ -55,6 +55,17 @@ function BotaoImprimir({ label = "Imprimir / salvar em PDF" }) {
   );
 }
 
+/* dois pentágonos que se cruzam — estímulo da praxia construtiva do MEEM.
+   A interseção é um quadrilátero, como na figura original. */
+function Pentagonos({ w = 150 }) {
+  return (
+    <svg viewBox="0 0 114 92" width={w} height={(w * 92) / 114} className="block">
+      <polygon points="38,12 66.5,32.7 55.6,66.3 20.4,66.3 9.5,32.7" fill="none" stroke="#000" strokeWidth="1.1" />
+      <polygon points="76,26 104.5,46.7 93.6,80.3 58.4,80.3 47.5,46.7" fill="none" stroke="#000" strokeWidth="1.1" />
+    </svg>
+  );
+}
+
 /* tabela simples da ficha impressa */
 function FichaTabela({ cols, linhas, total }) {
   return (
@@ -273,6 +284,22 @@ const meemSections = [
 ];
 const meemCutoffs = [["Analfabeto", "20"], ["1–4 anos", "25"], ["5–8 anos", "26"], ["9–11 anos", "28"], ["> 11 anos", "29"]];
 
+/* agrupamento e texto de cada item na ficha impressa */
+const meemGrupos = { ot: "Orientação", reg: "Registro", ac: "Atenção e cálculo", evoc: "Evocação", nom: "Linguagem" };
+const meemFicha = {
+  ot: () => "Qual é o dia, o mês, o ano, o dia da semana e a hora aproximada (tolerância de uma hora).",
+  oe: () => "Em qual local estamos (específico, apontando o chão) e que local é este (amplo), bairro ou rua próxima, cidade e estado.",
+  reg: (w) => `Dizer três palavras: ${w.join(", ")}. Pedir para prestar atenção, pois terá de repeti-las mais tarde.`,
+  ac: (_, x) => `Subtrair 100 − 7 (93, 86, 79, 72, 65). Alternativo: soletrar MUNDO ao contrário (O, D, N, U, M). Vale a tarefa com melhor aproveitamento.${x}`,
+  evoc: (w) => `Perguntar pelas três palavras anteriores: ${w.join(", ")}.`,
+  nom: () => "Nomear dois objetos: relógio e caneta.",
+  rep: () => "Repetir: “Nem aqui, nem ali, nem lá”.",
+  com: () => "Comando de três estágios, dito de uma só vez: pegar o papel com a mão direita, dobrar ao meio e colocar no chão.",
+  leit: () => "Ler (só com os olhos) e executar: FECHE OS OLHOS.",
+  esc: () => "Escrever uma frase completa, com começo, meio e fim.",
+  cop: () => "Copiar o desenho dos dois pentágonos que se cruzam.",
+};
+
 function MEEM() {
   const [checked, setChecked] = useState({});
   const [words, setWords] = useState(["CARRO", "VASO", "TIJOLO"]);
@@ -412,19 +439,51 @@ function MEEM() {
     {/* ficha para impressão / PDF */}
     <div className="hidden print:block text-black">
       <FichaCabecalho titulo="Mini-Exame do Estado Mental (MEEM)"
-        extra={<div><Campo rot="Escolaridade" valor={escIdx === null ? "" : meemCutoffs[escIdx][0]} w="150px" /></div>} />
-      <FichaTabela
-        cols={["Domínio", "Máx.", "Escore"]}
-        linhas={meemSections.map((s) => [
-          s.title + (s.calc && (mundoOn || acMundo > 0) ? ` — valeu a ${acTarefa} (subtração ${acSub}, MUNDO ${acMundo})` : ""),
-          lenOf(s), score(s),
-        ])}
-        total={["Total", 30, total]}
-      />
-      <p className="mt-3 text-[11px]">
+        extra={<div><Campo rot="Escolaridade (anos completos de estudo)" valor={escIdx === null ? "" : meemCutoffs[escIdx][0]} w="150px" /></div>} />
+      <table className="w-full border-collapse text-[10.5px]">
+        <tbody>
+          {meemSections.map((s) => {
+            const extraAc = s.calc && (mundoOn || acMundo > 0)
+              ? ` Valeu a ${acTarefa}: subtração ${acSub}/5, MUNDO ${acMundo}/5.` : "";
+            return (
+              <Fragment key={s.key}>
+                {meemGrupos[s.key] && (
+                  <tr>
+                    <td colSpan={3} className="border border-black px-2 py-1 font-bold uppercase text-[10px] bg-neutral-100">
+                      {meemGrupos[s.key]}
+                    </td>
+                  </tr>
+                )}
+                <tr>
+                  <td className="border border-black px-2 py-1 align-top">
+                    {meemFicha[s.key](words, extraAc)}
+                    {s.key === "cop" && (
+                      <div className="mt-1 flex items-start gap-3">
+                        <Pentagonos w={132} />
+                        <div className="flex-1 border border-dashed border-neutral-400 h-[106px] relative">
+                          <span className="absolute top-1 left-1 text-[8px] text-neutral-500 uppercase tracking-wide">Cópia do paciente</span>
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td className="border border-black px-2 py-1 text-center w-10 align-top font-bold">{lenOf(s)}</td>
+                  <td className="border border-black px-2 py-1 text-center w-12 align-top font-bold">{score(s)}</td>
+                </tr>
+              </Fragment>
+            );
+          })}
+          <tr className="font-bold">
+            <td className="border border-black px-2 py-1 uppercase">Total</td>
+            <td className="border border-black px-2 py-1 text-center">30</td>
+            <td className="border border-black px-2 py-1 text-center">{total}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p className="mt-2 text-[10px]">
         <b>Interpretação:</b> {corte === null
           ? `${total}/30. Corte clássico 24 — escolaridade não informada.`
-          : `${total}/30, ${abaixo ? "abaixo" : "dentro"} do esperado para escolaridade ${meemCutoffs[escIdx][0].toLowerCase()} (corte ${corte}, Brucki et al., 2003).`}
+          : `${total}/30, ${abaixo ? "abaixo" : "dentro"} do esperado para escolaridade ${meemCutoffs[escIdx][0].toLowerCase()} (corte ${corte}).`}
+        {" "}Cortes por escolaridade (Brucki et al., 2003): {meemCutoffs.map(([e, c]) => `${e.toLowerCase()} ${c}`).join(" · ")}.
       </p>
       <FichaRodape />
     </div>
