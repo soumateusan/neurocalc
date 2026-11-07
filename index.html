@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NeuroCalc</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @media print {
+        @page { size: A4 portrait; margin: 14mm; }
+        html, body { background: #fff !important; }
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

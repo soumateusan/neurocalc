@@ -1,5 +1,90 @@
-import React, { useState, Fragment } from "react";
-import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Flame, Images, Timer, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
+import React, { useState, Fragment, createContext, useContext } from "react";
+import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Flame, Images, Timer, User, Printer, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
+
+/* ---------- identificação do paciente, compartilhada entre as abas ---------- */
+const PacienteCtx = createContext({ nome: "", idade: "", data: "" });
+const hojeISO = () => new Date().toISOString().slice(0, 10);
+const fmtData = (iso) => (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split("-").reverse().join("/") : iso || "");
+
+/* linha pontilhada de formulário, usada só na impressão */
+function Campo({ rot, valor, w = "180px" }) {
+  return (
+    <span className="whitespace-nowrap">
+      {rot}:{" "}
+      <span className="inline-block border-b border-black align-bottom px-1" style={{ minWidth: w }}>
+        {valor || " "}
+      </span>
+    </span>
+  );
+}
+
+function FichaCabecalho({ titulo, extra }) {
+  const p = useContext(PacienteCtx);
+  return (
+    <div className="mb-3">
+      <h1 className="text-center text-sm font-bold uppercase tracking-wide">{titulo}</h1>
+      <div className="mt-3 text-[11px] leading-7">
+        <div><Campo rot="Nome do paciente" valor={p.nome} w="320px" /></div>
+        <div className="flex flex-wrap gap-x-6">
+          <Campo rot="Idade" valor={p.idade ? `${p.idade} anos` : ""} w="70px" />
+          <Campo rot="Data da avaliação" valor={fmtData(p.data)} w="110px" />
+        </div>
+        {extra}
+      </div>
+    </div>
+  );
+}
+
+function FichaRodape() {
+  return (
+    <div className="mt-10 text-[11px]">
+      <Campo rot="Assinatura e carimbo" valor="" w="320px" />
+      <p className="mt-6 text-[9px] text-neutral-500 border-t border-neutral-300 pt-2">
+        Documento gerado pelo NeuroCalc. Instrumento de rastreio — não substitui o julgamento clínico.
+      </p>
+    </div>
+  );
+}
+
+function BotaoImprimir({ label = "Imprimir / salvar em PDF" }) {
+  return (
+    <button onClick={() => window.print()}
+      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-slate-700 text-white text-sm font-semibold hover:bg-slate-800">
+      <Printer size={16} /> {label}
+    </button>
+  );
+}
+
+/* tabela simples da ficha impressa */
+function FichaTabela({ cols, linhas, total }) {
+  return (
+    <table className="w-full border-collapse text-[11px]">
+      <thead>
+        <tr>
+          {cols.map((c, i) => (
+            <th key={i} className={"border border-black px-2 py-1 font-bold " + (i === 0 ? "text-left" : "text-center w-16")}>{c}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {linhas.map((l, i) => (
+          <tr key={i}>
+            {l.map((c, j) => (
+              <td key={j} className={"border border-black px-2 py-1 " + (j === 0 ? "" : "text-center")}>{c}</td>
+            ))}
+          </tr>
+        ))}
+        {total && (
+          <tr className="font-bold">
+            {total.map((c, j) => (
+              <td key={j} className={"border border-black px-2 py-1 " + (j === 0 ? "" : "text-center")}>{c}</td>
+            ))}
+          </tr>
+        )}
+      </tbody>
+    </table>
+  );
+}
 
 /* ---------- clipboard ---------- */
 function copyToClipboard(text, onOk) {
@@ -192,6 +277,7 @@ function MEEM() {
   const [checked, setChecked] = useState({});
   const [words, setWords] = useState(["CARRO", "VASO", "TIJOLO"]);
   const [mundoOn, setMundoOn] = useState(false);
+  const [escIdx, setEscIdx] = useState(null);
   const [ok, fire] = useCopyOk();
   const toggle = (id) => setChecked((p) => ({ ...p, [id]: !p[id] }));
   const lenOf = (s) => (s.items ? s.items.length : s.len);
@@ -205,23 +291,39 @@ function MEEM() {
 
   const score = (s) => (s.calc ? acScore : conta(s.key, lenOf(s)));
   const total = meemSections.reduce((a, s) => a + score(s), 0);
+
+  /* corte por escolaridade (Brucki et al., 2003); abaixo do corte = suspeito */
+  const corte = escIdx === null ? null : parseInt(meemCutoffs[escIdx][1], 10);
+  const abaixo = corte === null ? total < 24 : total < corte;
+  const notaRes = corte === null
+    ? (total < 24 ? "Abaixo do corte clássico (24) — escolha a escolaridade para o corte específico"
+                  : "Acima do corte clássico (24) — escolha a escolaridade para o corte específico")
+    : `${abaixo ? "Abaixo" : "Dentro"} do esperado para ${meemCutoffs[escIdx][0].toLowerCase()} (corte ${corte})`;
+
   const text = `MEEM (Mini-Exame do Estado Mental): ${total}/30. ` +
     meemSections.map((s) => `${s.title.toLowerCase()} ${score(s)}/${lenOf(s)}`).join(", ") + ". " +
     `Em atenção e cálculo valeu a ${acTarefa}` +
-    (mundoOn || acMundo > 0 ? ` (subtração ${acSub}/5, MUNDO ${acMundo}/5).` : ".");
+    (mundoOn || acMundo > 0 ? ` (subtração ${acSub}/5, MUNDO ${acMundo}/5). ` : ". ") +
+    (corte === null ? "" : `Escolaridade ${meemCutoffs[escIdx][0].toLowerCase()}, corte ${corte}: ${abaixo ? "abaixo" : "dentro"} do esperado.`);
 
   return (
-    <div className="space-y-4">
-      <ResultBar title="Pontuação" value={`${total}`} suffix="/30" tone={total >= 24 ? "teal" : "amber"}
-        note={total >= 24 ? "Acima do corte clássico (24)" : "Abaixo de 24 — avaliar conforme escolaridade"} />
+    <>
+    <div className="space-y-4 print:hidden">
+      <ResultBar title="Pontuação" value={`${total}`} suffix="/30" tone={abaixo ? "amber" : "teal"} note={notaRes} />
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-        <p className="font-semibold text-slate-700 mb-1.5">Pontos de corte por escolaridade (Brucki et al., 2003):</p>
+        <p className="font-semibold text-slate-700 mb-1.5">Escolaridade — toque para aplicar o corte (Brucki et al., 2003):</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-          {meemCutoffs.map(([e, c]) => (
-            <div key={e} className="bg-white rounded-lg border border-slate-200 px-2 py-1.5">
-              <div className="text-[11px] text-slate-500">{e}</div><div className="font-bold text-slate-700">{c}</div>
-            </div>
-          ))}
+          {meemCutoffs.map(([e, c], i) => {
+            const sel = escIdx === i;
+            return (
+              <button key={e} onClick={() => setEscIdx(sel ? null : i)}
+                className={"rounded-lg border px-2 py-1.5 text-left transition-colors " +
+                  (sel ? "bg-teal-600 border-teal-600 text-white shadow-sm" : "bg-white border-slate-200 hover:border-teal-300")}>
+                <div className={"text-[11px] " + (sel ? "text-teal-50" : "text-slate-500")}>{e}</div>
+                <div className={"font-bold " + (sel ? "text-white" : "text-slate-700")}>{c}</div>
+              </button>
+            );
+          })}
         </div>
       </div>
       {meemSections.map((s) => (
@@ -303,8 +405,30 @@ function MEEM() {
           )}
         </div>
       ))}
-      <CopyBlock text={text} ok={ok} onCopy={() => fire(text)} onReset={() => { setChecked({}); }} />
+      <CopyBlock text={text} ok={ok} onCopy={() => fire(text)} onReset={() => { setChecked({}); setMundoOn(false); }} />
+      <BotaoImprimir />
     </div>
+
+    {/* ficha para impressão / PDF */}
+    <div className="hidden print:block text-black">
+      <FichaCabecalho titulo="Mini-Exame do Estado Mental (MEEM)"
+        extra={<div><Campo rot="Escolaridade" valor={escIdx === null ? "" : meemCutoffs[escIdx][0]} w="150px" /></div>} />
+      <FichaTabela
+        cols={["Domínio", "Máx.", "Escore"]}
+        linhas={meemSections.map((s) => [
+          s.title + (s.calc && (mundoOn || acMundo > 0) ? ` — valeu a ${acTarefa} (subtração ${acSub}, MUNDO ${acMundo})` : ""),
+          lenOf(s), score(s),
+        ])}
+        total={["Total", 30, total]}
+      />
+      <p className="mt-3 text-[11px]">
+        <b>Interpretação:</b> {corte === null
+          ? `${total}/30. Corte clássico 24 — escolaridade não informada.`
+          : `${total}/30, ${abaixo ? "abaixo" : "dentro"} do esperado para escolaridade ${meemCutoffs[escIdx][0].toLowerCase()} (corte ${corte}, Brucki et al., 2003).`}
+      </p>
+      <FichaRodape />
+    </div>
+    </>
   );
 }
 
@@ -489,7 +613,8 @@ function CDR() {
   const text = `CDR (Clinical Dementia Rating): CDR Global ${global} — ${label}. Soma das caixas (CDR-SOB) ${sob}/18. ` +
     cdrBoxes.map((b) => `${b.label.toLowerCase()} ${s[b.key]}`).join(", ") + ".";
   return (
-    <div className="space-y-4">
+    <>
+    <div className="space-y-4 print:hidden">
       <div className="grid grid-cols-2 gap-3">
         <ResultBar title="CDR Global" value={`${global}`} tone={tone} note={label} compact />
         <ResultBar title="CDR-SOB" value={`${sob}`} suffix="/18" tone="slate" note="Soma das caixas" compact />
@@ -514,7 +639,50 @@ function CDR() {
       </div>
       <p className="text-xs text-slate-400">CDR Global calculado pelo algoritmo da Washington University. Confira conforme seu julgamento clínico.</p>
       <CopyBlock text={text} ok={ok} onCopy={() => fire(text)} onReset={() => setS(init)} />
+      <BotaoImprimir />
     </div>
+
+    {/* ficha para impressão / PDF */}
+    <div className="hidden print:block text-black">
+      <FichaCabecalho titulo="Escala CDR (Clinical Dementia Rating)"
+        extra={<div><Campo rot="Escore final categórico" valor={`CDR ${String(global).replace(".", ",")} — ${label}`} w="230px" /></div>} />
+      <table className="w-full border-collapse text-[10px]">
+        <thead>
+          <tr>
+            <th className="border border-black px-1 py-1 text-left w-36">Domínio</th>
+            {[0, 0.5, 1, 2, 3].map((n) => (
+              <th key={n} className="border border-black px-1 py-1 text-center">CDR {String(n).replace(".", ",")}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {cdrBoxes.map((b) => (
+            <tr key={b.key}>
+              <td className="border border-black px-1 py-1 font-bold align-middle">{b.label}</td>
+              {[0, 0.5, 1, 2, 3].map((n) => {
+                const i = b.opts.indexOf(n);
+                const vazio = i === -1;
+                const sel = s[b.key] === n;
+                return (
+                  <td key={n} className={"border border-black px-1 py-1 align-top " + (vazio ? "bg-neutral-200" : sel ? "bg-neutral-300 font-bold" : "")}>
+                    {vazio ? "" : <><span className="mr-1">{sel ? "■" : "□"}</span>{b.desc[i]}</>}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="mt-3 text-[11px]">
+        <b>CDR Global:</b> {String(global).replace(".", ",")} — {label}. <b>Soma das caixas (CDR-SOB):</b> {String(sob).replace(".", ",")}/18.
+      </p>
+      <p className="mt-1 text-[10px]">
+        Pontuação por domínio: {cdrBoxes.map((b) => `${b.label.toLowerCase()} ${String(s[b.key]).replace(".", ",")}`).join(", ")}.
+        CDR global pelo algoritmo da Washington University.
+      </p>
+      <FichaRodape />
+    </div>
+    </>
   );
 }
 
@@ -1620,11 +1788,15 @@ const tabs = [
 
 export default function App() {
   const [tab, setTab] = useState("meem");
+  const [pac, setPac] = useState({ nome: "", idade: "", data: hojeISO() });
+  const [pacAberto, setPacAberto] = useState(false);
   const Active = tabs.find((t) => t.id === tab).comp;
+  const setP = (k, v) => setPac((p) => ({ ...p, [k]: v }));
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
-      <div className="max-w-4xl mx-auto px-3 py-5">
-        <header className="mb-4 flex items-center gap-2">
+    <PacienteCtx.Provider value={pac}>
+    <div className="min-h-screen bg-slate-100 text-slate-900 print:bg-white">
+      <div className="max-w-4xl mx-auto px-3 py-5 print:max-w-none print:p-0">
+        <header className="mb-4 flex items-center gap-2 print:hidden">
           <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center"><Brain size={20} /></div>
           <div>
             <h1 className="text-xl font-bold text-slate-800 leading-none">NeuroCalc</h1>
@@ -1632,9 +1804,33 @@ export default function App() {
           </div>
         </header>
 
+        {/* identificação do paciente — usada nas fichas impressas */}
+        <div className="mb-4 print:hidden">
+          <button onClick={() => setPacAberto((o) => !o)}
+            className="w-full flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-teal-300 transition-colors">
+            <span className="flex items-center gap-2 text-sm text-slate-600 min-w-0 truncate">
+              <User size={15} className="shrink-0 text-slate-400" />
+              {pac.nome ? <b className="text-slate-800 truncate">{pac.nome}{pac.idade ? `, ${pac.idade} anos` : ""}</b>
+                        : "Identificação do paciente — para as fichas impressas"}
+            </span>
+            <span className="text-xs text-slate-400 shrink-0">{pacAberto ? "fechar" : "editar"}</span>
+          </button>
+          {pacAberto && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_6rem_9rem] rounded-xl border border-slate-200 bg-white p-3">
+              {[["nome", "Nome do paciente", "text"], ["idade", "Idade", "number"], ["data", "Data da avaliação", "date"]].map(([k, lb, tp]) => (
+                <label key={k} className="block">
+                  <span className="block text-[11px] text-slate-500 mb-1">{lb}</span>
+                  <input type={tp} value={pac[k]} onChange={(e) => setP(k, e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-teal-400 outline-none" />
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-4 items-start">
           {/* menu lateral — a partir de telas médias */}
-          <nav className="hidden md:flex flex-col gap-1 w-44 shrink-0 sticky top-5">
+          <nav className="hidden md:flex flex-col gap-1 w-44 shrink-0 sticky top-5 print:hidden">
             {tabs.map((t) => {
               const Icon = t.icon; const sel = t.id === tab;
               return (
@@ -1648,9 +1844,9 @@ export default function App() {
             })}
           </nav>
 
-          <div className="flex-1 min-w-0 max-w-2xl">
+          <div className="flex-1 min-w-0 max-w-2xl print:max-w-none">
             {/* no celular o menu continua no topo, rolando na horizontal */}
-            <div className="flex md:hidden gap-1.5 mb-4 overflow-x-auto pb-1">
+            <div className="flex md:hidden gap-1.5 mb-4 overflow-x-auto pb-1 print:hidden">
               {tabs.map((t) => {
                 const Icon = t.icon; const sel = t.id === tab;
                 return (
@@ -1663,7 +1859,7 @@ export default function App() {
               })}
             </div>
             <main><Active /></main>
-            <footer className="mt-6 text-[11px] text-slate-400 leading-relaxed border-t border-slate-200 pt-3">
+            <footer className="mt-6 text-[11px] text-slate-400 leading-relaxed border-t border-slate-200 pt-3 print:hidden">
               Ferramenta de apoio à pontuação — não substitui o julgamento clínico nem as escalas oficiais.
               As descrições são resumos próprios. O UPDRS segue a estrutura clássica de 108 pontos.
               O MDS-UPDRS é protegido por direitos autorais (MDS) — uso institucional pode exigir permissão.
@@ -1675,5 +1871,6 @@ export default function App() {
         </div>
       </div>
     </div>
+    </PacienteCtx.Provider>
   );
 }
