@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Flame, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
+import React, { useState, Fragment } from "react";
+import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Flame, Images, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
 
 /* ---------- clipboard ---------- */
 function copyToClipboard(text, onOk) {
@@ -117,7 +117,11 @@ function NumRow({ label, hint, value, onChange, max, suffix }) {
 }
 
 function Badge({ children, tone = "teal" }) {
-  const map = { teal: "bg-teal-50 text-teal-700 border-teal-200", slate: "bg-slate-100 text-slate-600 border-slate-200" };
+  const map = {
+    teal: "bg-teal-50 text-teal-700 border-teal-200",
+    slate: "bg-slate-100 text-slate-600 border-slate-200",
+    amber: "bg-amber-50 text-amber-700 border-amber-200",
+  };
   return <span className={"inline-block px-2.5 py-1 rounded-full text-xs font-semibold border " + map[tone]}>{children}</span>;
 }
 
@@ -1100,9 +1104,278 @@ function Fibro() {
   );
 }
 
+/* ================= BBRC — Bateria Breve de Rastreio Cognitivo =================
+   Nitrini et al.; pontos de corte conforme a recomendação da Academia Brasileira
+   de Neurologia (Smid et al., Dement Neuropsychol 2022;16(3 Supl 1):1-17).
+   As pranchas de figuras são material à parte — o app registra e interpreta os escores. */
+const bbrcEsc = [
+  { lab: "Analfabeto (0 anos)", flu: 8 },
+  { lab: "1 a 7 anos", flu: 11 },
+  { lab: "8 anos ou mais", flu: 12 },
+];
+const n0a10 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const shulman = [
+  "Não representou o relógio",
+  "Representação gravemente desorganizada",
+  "Prejuízo relevante na organização visuoespacial",
+  "Relógio reconhecível, mas horário incorreto",
+  "Erro mínimo, sem perda importante da representação",
+  "Perfeito: mostrador, números e horário corretos",
+];
+/* figuras da prancha oficial, na ordem em que aparecem */
+const bbrcFigs = ["Sapato", "Casa", "Pente", "Chave", "Avião", "Balde", "Tartaruga", "Livro", "Colher", "Árvore"];
+const bbrcFases = [
+  { k: "inc", abbr: "Inc.", lab: "Memória incidental", cut: 4,
+    hint: "Esconda a prancha e pergunte: “Que figuras eu lhe mostrei?”. Até 60 s. Não avise antes que terá de memorizar." },
+  { k: "ime", abbr: "Imed.", lab: "Memória imediata", cut: 6,
+    hint: "Mostre a prancha por 30 s: “olhe bem e procure memorizar”. Esconda e pergunte de novo." },
+  { k: "apr", abbr: "Apr.", lab: "Aprendizado", cut: 6,
+    hint: "Repita a apresentação por 30 s, esconda e pergunte mais uma vez." },
+  { k: "tar", abbr: "5 min", lab: "Memória tardia", cut: 5,
+    hint: "Após o intervalo de 5 minutos: “Quais figuras eu lhe mostrei há 5 minutos?”. Não reapresente a prancha." },
+  { k: "rec", abbr: "Rec.", lab: "Reconhecimento", cut: 7,
+    hint: "Mostre a prancha de 20 figuras e pergunte quais já tinham sido mostradas. Registre as intrusões abaixo." },
+];
+
+function BBRC() {
+  const [esc, setEsc] = useState(1);
+  const [grid, setGrid] = useState({});
+  const [feita, setFeita] = useState({});
+  const [intr, setIntr] = useState(0);
+  const [perc, setPerc] = useState(null);
+  const [nom, setNom] = useState(null);
+  const [rel, setRel] = useState(null);
+  const [flu, setFlu] = useState("");
+  const [ok, fire] = useCopyOk();
+
+  const marca = (fi, fk) => {
+    setGrid((p) => ({ ...p, [`${fi}-${fk}`]: !p[`${fi}-${fk}`] }));
+    setFeita((p) => ({ ...p, [fk]: true }));
+  };
+  const conta = (fk) => bbrcFigs.reduce((a, _, i) => a + (grid[`${i}-${fk}`] ? 1 : 0), 0);
+  const aplicada = (fk) => !!feita[fk] || conta(fk) > 0;
+
+  const fluN = flu.trim() === "" ? NaN : parseInt(flu, 10);
+  const fluVal = isNaN(fluN) ? null : fluN;
+  const fluCut = bbrcEsc[esc].flu;
+
+  /* reconhecimento = alvos reconhecidos − distratores apontados */
+  const recBruto = conta("rec");
+  const recFinal = recBruto - intr;
+
+  const valorDe = (fk) => {
+    if (!aplicada(fk)) return null;
+    return fk === "rec" ? recFinal : conta(fk);
+  };
+
+  /* os 7 subtestes interpretáveis — percepção e nomeação não entram */
+  const subs = [
+    ...bbrcFases.slice(0, 3).map((f) => ({ lab: f.lab, v: valorDe(f.k), cut: f.cut, uni: "/10" })),
+    { lab: "Fluência verbal", v: fluVal, cut: fluCut, uni: " animais" },
+    { lab: "Desenho do relógio", v: rel, cut: 2, uni: "/5" },
+    ...bbrcFases.slice(3).map((f) => ({ lab: f.lab, v: valorDe(f.k), cut: f.cut, uni: "/10" })),
+  ].map((x) => ({ ...x, resp: x.v !== null, alt: x.v !== null && x.v <= x.cut }));
+  const respondidos = subs.filter((x) => x.resp).length;
+  const alterados = subs.filter((x) => x.alt).length;
+  const faltam = 7 - respondidos;
+
+  let interp, tone;
+  if (alterados === 0) { interp = "Dentro da normalidade esperada no rastreio"; tone = "teal"; }
+  else if (alterados <= 2) { interp = "Sugestivo de possível comprometimento cognitivo leve"; tone = "amber"; }
+  else { interp = "Sugestivo de comprometimento cognitivo significativo"; tone = "red"; }
+
+  const mostra = (v, uni) => (v === null ? "não aplicado" : `${v}${uni}`);
+  const text = `BBRC (Bateria Breve de Rastreio Cognitivo) — escolaridade: ${bbrcEsc[esc].lab.toLowerCase()}. ` +
+    `Percepção visual ${mostra(perc, "/10")}, nomeação ${mostra(nom, "/10")}, ` +
+    subs.map((x) => `${x.lab.toLowerCase()} ${mostra(x.v, x.uni)}`).join(", ") +
+    (aplicada("rec") ? ` (${recBruto} alvos − ${intr} intrusões)` : "") +
+    `. Subtestes alterados: ${alterados} de 7${faltam ? ` (${faltam} ainda não aplicado(s))` : ""} — ${interp.toLowerCase()}.`;
+
+  const zerar = () => {
+    setGrid({}); setFeita({}); setIntr(0);
+    setPerc(null); setNom(null); setRel(null); setFlu("");
+  };
+
+  return (
+    <div className="space-y-5">
+      <ResultBar title="Subtestes alterados" value={`${alterados}`} suffix="/7" tone={tone}
+        note={faltam ? `${interp} · ${faltam} subteste(s) ainda não aplicado(s)` : interp} />
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+        <b>Antes de começar:</b> tenha em mãos as pranchas oficiais — a de 10 figuras (percepção, nomeação,
+        incidental, imediata e aprendizado) e a de 20 figuras (reconhecimento). O app é a folha de respostas;
+        as figuras são material à parte.
+      </div>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">Escolaridade</h2>
+        <p className="text-xs text-slate-400">Define o ponto de corte da fluência verbal.</p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {bbrcEsc.map((e, i) => (
+            <button key={e.lab} onClick={() => setEsc(i)}
+              className={"rounded-xl border px-3 py-2 text-sm font-semibold transition-colors " +
+                (esc === i ? "bg-teal-600 border-teal-600 text-white shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:border-teal-300")}>
+              <div>{e.lab}</div>
+              <div className={"text-[11px] font-normal " + (esc === i ? "text-teal-50" : "text-slate-400")}>corte ≤ {e.flu} animais</div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* grade de respostas */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">Folha de respostas</h2>
+        <p className="text-xs text-slate-400">
+          Marque cada figura evocada, em cada etapa. Os totais são somados sozinhos.
+        </p>
+        <div className="rounded-xl border border-slate-200 bg-white p-2 overflow-x-auto">
+          <div className="grid gap-1 min-w-[300px]" style={{ gridTemplateColumns: "minmax(0,1fr) repeat(5, 2.4rem)" }}>
+            <div />
+            {bbrcFases.map((f) => {
+              const on = aplicada(f.k);
+              return (
+                <button key={f.k} onClick={() => setFeita((p) => ({ ...p, [f.k]: !p[f.k] }))} disabled={conta(f.k) > 0}
+                  title={on ? `${f.lab} — aplicada` : `Marcar ${f.lab} como aplicada`}
+                  className={"text-[10px] font-bold leading-tight py-1 rounded-md border transition-colors " +
+                    (on ? "bg-teal-50 border-teal-200 text-teal-700" : "bg-white border-slate-200 text-slate-400")}>
+                  {f.abbr}
+                </button>
+              );
+            })}
+
+            {bbrcFigs.map((fig, i) => (
+              <Fragment key={fig}>
+                <div className="text-xs text-slate-700 flex items-center pr-1 truncate">{i + 1}. {fig}</div>
+                {bbrcFases.map((f) => {
+                  const on = !!grid[`${i}-${f.k}`];
+                  return (
+                    <button key={f.k} onClick={() => marca(i, f.k)} title={`${fig} — ${f.lab}`}
+                      className={"h-8 rounded-md border flex items-center justify-center transition-colors " +
+                        (on ? "bg-teal-600 border-teal-600" : "bg-white border-slate-200 hover:border-teal-300")}>
+                      {on && <Check size={14} className="text-white" />}
+                    </button>
+                  );
+                })}
+              </Fragment>
+            ))}
+
+            <div className="text-xs font-semibold text-slate-600 flex items-center pt-1">Total</div>
+            {bbrcFases.map((f) => (
+              <div key={f.k} className="text-sm font-bold text-center text-slate-700 pt-1">{conta(f.k)}</div>
+            ))}
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-400">
+          Uma etapa em que o paciente não evocou nenhuma figura conta como zero, não como pendente — para isso,
+          toque no título da coluna para marcá-la como aplicada.
+        </p>
+
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
+          <div className="min-w-0">
+            <div className="text-sm text-slate-700">Intrusões no reconhecimento</div>
+            <div className="text-xs text-slate-400">distratores apontados · reconhecimento = {recBruto} − {intr} = {recFinal}</div>
+          </div>
+          <NumField value={intr} onChange={setIntr} max={10} />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">1. Identificação e nomeação</h2>
+        <p className="text-xs text-slate-400">
+          Mostre a prancha de 10 figuras e pergunte: “que figuras são estas?”. Não entram na contagem de subtestes alterados.
+        </p>
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-sm font-semibold text-slate-800 mb-1">Percepção visual</div>
+          <p className="text-xs text-slate-400 mb-2">Figuras corretamente identificadas, mesmo sem nomear direito.</p>
+          <Picker value={perc} onChange={setPerc} options={n0a10} />
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3">
+          <div className="text-sm font-semibold text-slate-800 mb-1">Nomeação</div>
+          <p className="text-xs text-slate-400 mb-2">Figuras nomeadas corretamente.</p>
+          <Picker value={nom} onChange={setNom} options={n0a10} />
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">2. Etapas de memória</h2>
+        <div className="space-y-2">
+          {bbrcFases.map((f) => {
+            const v = valorDe(f.k);
+            const alt = v !== null && v <= f.cut;
+            return (
+              <div key={f.k} className={"rounded-xl border bg-white p-3 " + (alt ? "border-amber-300" : "border-slate-200")}>
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <span className="text-sm font-semibold text-slate-800">{f.lab}</span>
+                  <Badge tone={v === null ? "slate" : alt ? "amber" : "teal"}>
+                    {v === null ? `corte ≤ ${f.cut}` : `${v}/10 · ${alt ? "alterado" : "normal"}`}
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-400">{f.hint}</p>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-slate-400">
+          Entre o aprendizado e a memória tardia, aplique a fluência e o relógio para preencher o intervalo de 5 minutos.
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-bold uppercase tracking-wide text-teal-700">3. Tarefas de interferência</h2>
+        <div className={"rounded-xl border bg-white p-3 " + (fluVal !== null && fluVal <= fluCut ? "border-amber-300" : "border-slate-200")}>
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <span className="text-sm font-semibold text-slate-800">Fluência verbal — animais em 1 minuto</span>
+            <Badge tone={fluVal === null ? "slate" : fluVal <= fluCut ? "amber" : "teal"}>
+              {fluVal === null ? `corte ≤ ${fluCut}` : fluVal <= fluCut ? "alterado" : "normal"}
+            </Badge>
+          </div>
+          <p className="text-xs text-slate-400 mb-2">
+            “Diga o nome de todos os animais que conseguir se lembrar em um minuto.” Conte apenas nomes válidos e sem repetição.
+          </p>
+          <div className="flex items-center gap-2">
+            <input type="number" value={flu} min={0} max={99} placeholder="—" inputMode="numeric"
+              onChange={(e) => setFlu(e.target.value)}
+              className="w-20 text-center rounded-lg border border-slate-200 py-1.5 text-sm font-semibold text-slate-800 focus:border-teal-400 outline-none" />
+            <span className="text-xs text-slate-400">animais</span>
+          </div>
+        </div>
+        <ScoredItem label="Desenho do relógio — critérios de Shulman" bold value={rel} options={[0, 1, 2, 3, 4, 5]}
+          desc={shulman} onChange={setRel} />
+        <p className="text-[11px] text-slate-400">
+          “Desenhe um relógio redondo e grande, coloque todos os números e marque 11 horas e 10 minutos.”
+          Considerado alterado com escore ≤ 2 — é o corte menos consensual da bateria.
+        </p>
+      </section>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <p className="text-xs font-semibold text-slate-700 mb-2">Subtestes</p>
+        <div className="space-y-1">
+          {subs.map((x) => (
+            <div key={x.lab} className="flex items-center gap-2 text-xs">
+              <span className="text-slate-600 flex-1 min-w-0 truncate">{x.lab}</span>
+              <span className="text-slate-400 whitespace-nowrap">{x.resp ? `${x.v}${x.uni}` : "—"}</span>
+              <span className={"w-16 text-right font-semibold " +
+                (!x.resp ? "text-slate-300" : x.alt ? "text-amber-600" : "text-teal-700")}>
+                {!x.resp ? "pendente" : x.alt ? "alterado" : "normal"}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-200">
+          0 subtestes alterados: normalidade esperada · 1 a 2: possível comprometimento cognitivo leve ·
+          3 ou mais: comprometimento cognitivo significativo.
+        </p>
+      </div>
+
+      <CopyBlock text={text} ok={ok} onCopy={() => fire(text)} onReset={zerar} />
+    </div>
+  );
+}
+
 /* ================= APP ================= */
 const tabs = [
   { id: "meem", label: "MEEM", icon: Brain, comp: MEEM },
+  { id: "bbrc", label: "BBRC", icon: Images, comp: BBRC },
   { id: "updrs", label: "UPDRS Motor", icon: Activity, comp: UPDRS },
   { id: "cdr", label: "CDR", icon: ClipboardList, comp: CDR },
   { id: "mgadl", label: "MG-ADL", icon: Stethoscope, comp: MGADL },
@@ -1164,6 +1437,7 @@ export default function App() {
               O MDS-UPDRS é protegido por direitos autorais (MDS) — uso institucional pode exigir permissão.
               Escore 4D: Pasqualetti et al., <i>Cephalalgia</i> 2025;45(12). FiRST: Perrot et al., <i>Pain</i> 2010;150:250-6.
               Critérios de fibromialgia: revisão de 2016 de Wolfe et al., <i>Semin Arthritis Rheum</i> 2016;46:319-29.
+          BBRC: Nitrini et al.; pontos de corte conforme Smid et al., <i>Dement Neuropsychol</i> 2022;16(3 Supl 1):1-17.
             </footer>
           </div>
         </div>
