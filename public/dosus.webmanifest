@@ -1,0 +1,10 @@
+{
+  "name": "DOSUS Neuro",
+  "short_name": "DOSUS Neuro",
+  "description": "Preenchimento automatizado de documentos do SUS para neurologia",
+  "start_url": "/dosus.html",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0f766e",
+  "icons": [{ "src": "/dosus.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

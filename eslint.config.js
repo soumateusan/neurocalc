@@ -18,4 +18,9 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // módulos compartilhados exportam componentes junto com dados e cálculos
+    files: ['src/shared/**/*.{js,jsx}', 'src/dosus/**/*.{js,jsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 ])
