@@ -1,5 +1,5 @@
 import React, { useState, Fragment } from "react";
-import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Flame, Images, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
+import { Brain, Activity, ClipboardList, Stethoscope, Zap, HeartPulse, CloudRain, Users, Flame, Images, Timer, Copy, Check, RotateCcw, Info, AlertTriangle } from "lucide-react";
 
 /* ---------- clipboard ---------- */
 function copyToClipboard(text, onOk) {
@@ -42,13 +42,16 @@ function Picker({ value, onChange, options = [0, 1, 2, 3, 4], labels }) {
   );
 }
 
-function ScoredItem({ label, bold, value, options = [0, 1, 2, 3, 4], desc, onChange }) {
+function ScoredItem({ label, bold, value, options = [0, 1, 2, 3, 4], desc, hint, onChange }) {
   const [open, setOpen] = useState(false);
   const meaning = desc ? desc[options.indexOf(value)] : null;
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className={"text-sm " + (bold ? "font-semibold text-slate-800" : "text-slate-700")}>{label}</span>
+        <div className="min-w-0">
+          <span className={"text-sm " + (bold ? "font-semibold text-slate-800" : "text-slate-700")}>{label}</span>
+          {hint && <p className="text-xs text-slate-400 mt-1 leading-relaxed">{hint}</p>}
+        </div>
         {desc && (
           <button onClick={() => setOpen((o) => !o)} className="text-slate-400 hover:text-teal-600 shrink-0 mt-0.5">
             <Info size={15} />
@@ -408,37 +411,49 @@ function UPDRS() {
 
 /* ================= CDR ================= */
 const cdrBoxes = [
-  { key: "mem", label: "Memória", primary: true, opts: [0, 0.5, 1, 2, 3], desc: [
+  { key: "mem", label: "Memória", primary: true, opts: [0, 0.5, 1, 2, 3],
+    como: "Pergunte ao informante sobre esquecimentos recentes: repetir as mesmas perguntas, esquecer conversas, compromissos e onde guardou objetos. Compare com fatos antigos, que costumam resistir mais.",
+    desc: [
     "Sem perda de memória ou esquecimento leve inconsistente",
     "Esquecimento leve e consistente; lembrança parcial dos eventos",
     "Perda moderada, mais marcada para fatos recentes; interfere nas atividades diárias",
     "Perda grave; retém só material muito aprendido; o novo se perde rápido",
     "Perda grave; restam apenas fragmentos"] },
-  { key: "ori", label: "Orientação", opts: [0, 0.5, 1, 2, 3], desc: [
+  { key: "ori", label: "Orientação", opts: [0, 0.5, 1, 2, 3],
+    como: "Verifique dia, mês, ano e horário aproximado, e pergunte ao informante se o paciente se perde — primeiro em lugares desconhecidos, depois em trajetos e ambientes familiares.",
+    desc: [
     "Totalmente orientado",
     "Orientado, com leve dificuldade nas relações de tempo",
     "Dificuldade moderada com tempo; orientado ao local no exame",
     "Grave dificuldade com tempo; em geral desorientado no tempo, às vezes no espaço",
     "Orientado apenas quanto à própria pessoa"] },
-  { key: "jul", label: "Julgamento e solução de problemas", opts: [0, 0.5, 1, 2, 3], desc: [
+  { key: "jul", label: "Julgamento e solução de problemas", opts: [0, 0.5, 1, 2, 3],
+    como: "Explore o manejo de dinheiro e contas, como lida com imprevistos (um vazamento, um remédio que acabou) e a compreensão de semelhanças, diferenças e provérbios.",
+    desc: [
     "Resolve bem os problemas do dia a dia; bom julgamento",
     "Leve prejuízo na solução de problemas, semelhanças e diferenças",
     "Dificuldade moderada; julgamento social geralmente mantido",
     "Grave prejuízo; julgamento social geralmente comprometido",
     "Incapaz de fazer julgamentos ou resolver problemas"] },
-  { key: "com", label: "Relações comunitárias", opts: [0, 0.5, 1, 2, 3], desc: [
+  { key: "com", label: "Relações comunitárias", opts: [0, 0.5, 1, 2, 3],
+    como: "Pergunte sobre trabalho, compras, banco, dirigir e compromissos fora de casa — e se alguém de fora da família perceberia algo errado num encontro casual.",
+    desc: [
     "Independente no trabalho, compras e finanças",
     "Leve dificuldade nessas atividades",
     "Sem independência, mas participa de algumas; normal à inspeção casual",
     "Sem independência fora de casa; aparenta bem para ser levado a atividades",
     "Sem independência; aparenta doente demais para sair de casa"] },
-  { key: "lar", label: "Lar e passatempos", opts: [0, 0.5, 1, 2, 3], desc: [
+  { key: "lar", label: "Lar e passatempos", opts: [0, 0.5, 1, 2, 3],
+    como: "Pergunte sobre tarefas domésticas, cozinhar, uso de aparelhos, leitura e hobbies: o que ainda faz sozinho, o que simplificou e o que abandonou.",
+    desc: [
     "Vida no lar, hobbies e interesses bem mantidos",
     "Vida no lar e interesses levemente comprometidos",
     "Comprometimento leve mas definido; hobbies/tarefas difíceis abandonados",
     "Só tarefas simples preservadas; interesses muito restritos",
     "Nenhuma função significativa no lar"] },
-  { key: "cui", label: "Cuidados pessoais", opts: [0, 1, 2, 3], desc: [
+  { key: "cui", label: "Cuidados pessoais", opts: [0, 1, 2, 3],
+    como: "Verifique vestir-se, higiene, banho e alimentação: se precisa ser lembrado, se precisa de ajuda e se há incontinência. Único domínio sem a opção 0,5.",
+    desc: [
     "Totalmente capaz de se cuidar",
     "Precisa ser estimulado",
     "Precisa de ajuda para vestir-se, higiene e cuidados pessoais",
@@ -483,11 +498,17 @@ function CDR() {
         <p className="font-semibold text-slate-700 mb-1">Escala geral:</p>
         <p>0 — sem demência · 0,5 — questionável/CCL · 1 — leve · 2 — moderada · 3 — grave. Toque em ⓘ para o significado de cada nota por domínio.</p>
       </div>
+      <div className="rounded-xl border border-teal-200 bg-teal-50 p-3 text-xs text-teal-900 space-y-1">
+        <p className="font-semibold">Como aplicar</p>
+        <p>Baseie-se na entrevista com o paciente <b>e com um informante confiável</b>, cada um em separado quando possível.</p>
+        <p>Pontue cada domínio pela <b>mudança em relação ao nível prévio do próprio paciente</b>, não comparando com outras pessoas — e apenas o que for perda cognitiva: limitação por problema físico, visual ou motor não conta.</p>
+        <p>Os seis domínios são pontuados de forma independente; a memória é a categoria primária no cálculo do CDR global.</p>
+      </div>
       <div className="space-y-2">
         {cdrBoxes.map((b) => (
           <div key={b.key}>
             {b.primary && <div className="mb-1"><Badge>categoria primária</Badge></div>}
-            <ScoredItem label={b.label} bold value={s[b.key]} options={b.opts} desc={b.desc} onChange={(v) => set(b.key, v)} />
+            <ScoredItem label={b.label} bold value={s[b.key]} options={b.opts} desc={b.desc} hint={b.como} onChange={(v) => set(b.key, v)} />
           </div>
         ))}
       </div>
@@ -1442,21 +1463,32 @@ function BBRC() {
             const v = valorDe(f.k);
             const alt = v !== null && v <= f.cut;
             return (
-              <div key={f.k} className={"rounded-xl border bg-white p-3 " + (alt ? "border-amber-300" : "border-slate-200")}>
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <span className="text-sm font-semibold text-slate-800">{f.lab}</span>
-                  <Badge tone={v === null ? "slate" : alt ? "amber" : "teal"}>
-                    {v === null ? `corte ≤ ${f.cut}` : `${v}/10 · ${alt ? "alterado" : "normal"}`}
-                  </Badge>
+              <Fragment key={f.k}>
+                {f.k === "tar" && (
+                  <div className="rounded-xl border-2 border-dashed border-amber-400 bg-amber-50 p-3 flex gap-3 items-start">
+                    <Timer size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-amber-900">Pare aqui: intervalo de 5 minutos</p>
+                      <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                        Antes da memória tardia, aplique a <b>fluência verbal</b> e o <b>desenho do relógio</b> (seção 3, logo abaixo)
+                        para preencher o intervalo. Só depois volte e pergunte as figuras — sem reapresentar a prancha.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                <div className={"rounded-xl border bg-white p-3 " + (alt ? "border-amber-300" : "border-slate-200")}>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <span className="text-sm font-semibold text-slate-800">{f.lab}</span>
+                    <Badge tone={v === null ? "slate" : alt ? "amber" : "teal"}>
+                      {v === null ? `corte ≤ ${f.cut}` : `${v}/10 · ${alt ? "alterado" : "normal"}`}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-400">{f.hint}</p>
                 </div>
-                <p className="text-xs text-slate-400">{f.hint}</p>
-              </div>
+              </Fragment>
             );
           })}
         </div>
-        <p className="text-[11px] text-slate-400">
-          Entre o aprendizado e a memória tardia, aplique a fluência e o relógio para preencher o intervalo de 5 minutos.
-        </p>
       </section>
 
       <section className="space-y-3">
