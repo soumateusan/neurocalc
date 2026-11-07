@@ -1099,7 +1099,7 @@ export default function App() {
   const Active = tabs.find((t) => t.id === tab).comp;
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <div className="max-w-2xl mx-auto px-3 py-5">
+      <div className="max-w-4xl mx-auto px-3 py-5">
         <header className="mb-4 flex items-center gap-2">
           <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center"><Brain size={20} /></div>
           <div>
@@ -1107,26 +1107,47 @@ export default function App() {
             <p className="text-sm text-slate-500">Escalas neurológicas — funciona offline</p>
           </div>
         </header>
-        <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
-          {tabs.map((t) => {
-            const Icon = t.icon; const sel = t.id === tab;
-            return (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={"flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold whitespace-nowrap transition-colors " +
-                  (sel ? "bg-teal-600 text-white shadow-sm" : "bg-white text-slate-600 hover:bg-slate-50 border border-slate-200")}>
-                <Icon size={16} /> {t.label}
-              </button>
-            );
-          })}
+
+        <div className="flex gap-4 items-start">
+          {/* menu lateral — a partir de telas médias */}
+          <nav className="hidden md:flex flex-col gap-1 w-44 shrink-0 sticky top-5">
+            {tabs.map((t) => {
+              const Icon = t.icon; const sel = t.id === tab;
+              return (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={"flex items-center gap-2 w-full px-3 py-2 rounded-xl text-sm font-semibold text-left border transition-colors " +
+                    (sel ? "bg-teal-600 border-teal-600 text-white shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-teal-300")}>
+                  <Icon size={16} className="shrink-0" />
+                  <span className="truncate">{t.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="flex-1 min-w-0 max-w-2xl">
+            {/* no celular o menu continua no topo, rolando na horizontal */}
+            <div className="flex md:hidden gap-1.5 mb-4 overflow-x-auto pb-1">
+              {tabs.map((t) => {
+                const Icon = t.icon; const sel = t.id === tab;
+                return (
+                  <button key={t.id} onClick={() => setTab(t.id)}
+                    className={"flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold whitespace-nowrap border transition-colors " +
+                      (sel ? "bg-teal-600 border-teal-600 text-white shadow-sm" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50")}>
+                    <Icon size={16} /> {t.label}
+                  </button>
+                );
+              })}
+            </div>
+            <main><Active /></main>
+            <footer className="mt-6 text-[11px] text-slate-400 leading-relaxed border-t border-slate-200 pt-3">
+              Ferramenta de apoio à pontuação — não substitui o julgamento clínico nem as escalas oficiais.
+              As descrições são resumos próprios. O UPDRS segue a estrutura clássica de 108 pontos.
+              O MDS-UPDRS é protegido por direitos autorais (MDS) — uso institucional pode exigir permissão.
+              Escore 4D: Pasqualetti et al., <i>Cephalalgia</i> 2025;45(12). FiRST: Perrot et al., <i>Pain</i> 2010;150:250-6.
+              Critérios de fibromialgia: revisão de 2016 de Wolfe et al., <i>Semin Arthritis Rheum</i> 2016;46:319-29.
+            </footer>
+          </div>
         </div>
-        <main><Active /></main>
-        <footer className="mt-6 text-[11px] text-slate-400 leading-relaxed border-t border-slate-200 pt-3">
-          Ferramenta de apoio à pontuação — não substitui o julgamento clínico nem as escalas oficiais.
-          As descrições são resumos próprios. O UPDRS segue a estrutura clássica de 108 pontos.
-          O MDS-UPDRS é protegido por direitos autorais (MDS) — uso institucional pode exigir permissão.
-          Escore 4D: Pasqualetti et al., <i>Cephalalgia</i> 2025;45(12). FiRST: Perrot et al., <i>Pain</i> 2010;150:250-6.
-          Critérios de fibromialgia: revisão de 2016 de Wolfe et al., <i>Semin Arthritis Rheum</i> 2016;46:319-29.
-        </footer>
       </div>
     </div>
   );
