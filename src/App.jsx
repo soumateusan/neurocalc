@@ -153,8 +153,20 @@ function CopyBlock({ text, onCopy, ok, onReset }) {
 
 /* ================= MEEM ================= */
 const meemSections = [
-  { key: "ot", title: "Orientação temporal", items: ["Ano", "Estação do ano", "Mês", "Dia da semana", "Dia do mês"] },
-  { key: "oe", title: "Orientação espacial", items: ["Estado", "Cidade", "Bairro / rua", "Local (instituição)", "Andar / cômodo"] },
+  { key: "ot", title: "Orientação temporal", note: "Pergunte ao paciente. 1 ponto para cada resposta correta.", items: [
+    { q: "Que dia é hoje?" },
+    { q: "Em que mês estamos?" },
+    { q: "Em que ano estamos?" },
+    { q: "Em que dia da semana estamos?" },
+    { q: "Qual é a hora aproximada?", hint: "aceitar variação de mais ou menos uma hora" },
+  ] },
+  { key: "oe", title: "Orientação espacial", note: "Pergunte ao paciente. 1 ponto para cada resposta correta.", items: [
+    { q: "Em qual local nós estamos?", hint: "apontando para o chão: consultório, dormitório, sala" },
+    { q: "Que local é este aqui?", hint: "apontando ao redor, num sentido mais amplo: hospital, casa de repouso, própria casa" },
+    { q: "Em qual bairro nós estamos?", hint: "ou o nome de uma rua próxima" },
+    { q: "Em que cidade nós estamos?" },
+    { q: "Em que estado nós estamos?" },
+  ] },
   { key: "reg", title: "Memória de registro", note: "Diga 3 palavras (1 ponto cada). Edite abaixo as palavras usadas.", words: true, len: 3 },
   { key: "ac", title: "Atenção e cálculo", note: "100 − 7 sucessivamente (ou soletrar “MUNDO” de trás para frente).", items: ["93", "86", "79", "72", "65"] },
   { key: "evoc", title: "Memória de evocação", note: "Marque cada palavra recordada corretamente.", evoc: true, len: 3 },
@@ -219,9 +231,16 @@ function MEEM() {
               ))}
             </div>
           ) : (
-            <div className={"grid gap-2 " + (s.items.length > 1 ? "sm:grid-cols-2" : "grid-cols-1")}>
+            <div className={"grid gap-2 " + (s.items.some((it) => it.hint) ? "grid-cols-1" : s.items.length > 1 ? "sm:grid-cols-2" : "grid-cols-1")}>
               {s.items.map((it, i) => (
-                <CheckChip key={i} checked={!!checked[`${s.key}-${i}`]} onToggle={() => toggle(`${s.key}-${i}`)}>{it}</CheckChip>
+                <CheckChip key={i} checked={!!checked[`${s.key}-${i}`]} onToggle={() => toggle(`${s.key}-${i}`)}>
+                  {typeof it === "string" ? it : (
+                    <>
+                      {it.q}
+                      {it.hint && <span className="block text-xs text-slate-400 mt-0.5">{it.hint}</span>}
+                    </>
+                  )}
+                </CheckChip>
               ))}
             </div>
           )}
