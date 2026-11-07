@@ -172,7 +172,9 @@ const meemSections = [
     { q: "Em que estado nós estamos?" },
   ] },
   { key: "reg", title: "Memória de registro", note: "Diga 3 palavras (1 ponto cada). Edite abaixo as palavras usadas.", words: true, len: 3 },
-  { key: "ac", title: "Atenção e cálculo", note: "100 − 7 sucessivamente (ou soletrar “MUNDO” de trás para frente).", items: ["93", "86", "79", "72", "65"] },
+  { key: "ac", title: "Atenção e cálculo", calc: true, len: 5,
+    note: "Subtrair 100 − 7 sucessivamente. Se o paciente não conseguir, use a soletração de MUNDO ao contrário. Vale a tarefa com melhor aproveitamento.",
+    items: ["93", "86", "79", "72", "65"], mundo: ["O", "D", "N", "U", "M"] },
   { key: "evoc", title: "Memória de evocação", note: "Marque cada palavra recordada corretamente.", evoc: true, len: 3 },
   { key: "nom", title: "Nomeação", note: "Mostrar os objetos e pedir o nome.", items: ["Relógio", "Caneta"] },
   { key: "rep", title: "Repetição", note: "Pedir para repetir a frase.", items: ["“Nem aqui, nem ali, nem lá”"] },
@@ -186,13 +188,24 @@ const meemCutoffs = [["Analfabeto", "20"], ["1–4 anos", "25"], ["5–8 anos", 
 function MEEM() {
   const [checked, setChecked] = useState({});
   const [words, setWords] = useState(["CARRO", "VASO", "TIJOLO"]);
+  const [mundoOn, setMundoOn] = useState(false);
   const [ok, fire] = useCopyOk();
   const toggle = (id) => setChecked((p) => ({ ...p, [id]: !p[id] }));
   const lenOf = (s) => (s.items ? s.items.length : s.len);
-  const score = (s) => { let n = 0; for (let i = 0; i < lenOf(s); i++) if (checked[`${s.key}-${i}`]) n++; return n; };
+  const conta = (pref, n) => { let c = 0; for (let i = 0; i < n; i++) if (checked[`${pref}-${i}`]) c++; return c; };
+
+  /* atenção e cálculo: vale a tarefa com melhor aproveitamento (subtração ou MUNDO) */
+  const acSub = conta("ac", 5);
+  const acMundo = conta("mundo", 5);
+  const acScore = Math.max(acSub, acMundo);
+  const acTarefa = acMundo > acSub ? "soletração de MUNDO" : "subtração de 7";
+
+  const score = (s) => (s.calc ? acScore : conta(s.key, lenOf(s)));
   const total = meemSections.reduce((a, s) => a + score(s), 0);
   const text = `MEEM (Mini-Exame do Estado Mental): ${total}/30. ` +
-    meemSections.map((s) => `${s.title.toLowerCase()} ${score(s)}/${lenOf(s)}`).join(", ") + ".";
+    meemSections.map((s) => `${s.title.toLowerCase()} ${score(s)}/${lenOf(s)}`).join(", ") + ". " +
+    `Em atenção e cálculo valeu a ${acTarefa}` +
+    (mundoOn || acMundo > 0 ? ` (subtração ${acSub}/5, MUNDO ${acMundo}/5).` : ".");
 
   return (
     <div className="space-y-4">
@@ -215,7 +228,44 @@ function MEEM() {
             <Badge>{score(s)}/{lenOf(s)}</Badge>
           </div>
           {s.note && <p className="text-xs text-slate-400 mb-2">{s.note}</p>}
-          {s.words ? (
+          {s.calc ? (
+            <div className="space-y-3">
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-xs font-semibold text-slate-600">Subtração 100 − 7</span>
+                  <Badge tone={acSub >= acMundo ? "teal" : "slate"}>{acSub}/5{acSub >= acMundo ? " · conta" : ""}</Badge>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-5 grid-cols-3">
+                  {s.items.map((it, i) => (
+                    <CheckChip key={i} checked={!!checked[`ac-${i}`]} onToggle={() => toggle(`ac-${i}`)}>{it}</CheckChip>
+                  ))}
+                </div>
+              </div>
+
+              {mundoOn || acMundo > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <span className="text-xs font-semibold text-slate-600">Soletrar MUNDO ao contrário</span>
+                    <Badge tone={acMundo > acSub ? "teal" : "slate"}>{acMundo}/5{acMundo > acSub ? " · conta" : ""}</Badge>
+                  </div>
+                  <div className="grid gap-2 grid-cols-5">
+                    {s.mundo.map((l, i) => (
+                      <CheckChip key={i} checked={!!checked[`mundo-${i}`]} onToggle={() => toggle(`mundo-${i}`)}>{l}</CheckChip>
+                    ))}
+                  </div>
+                  <button onClick={() => { setMundoOn(false); setChecked((p) => { const n = { ...p }; s.mundo.forEach((_, i) => delete n[`mundo-${i}`]); return n; }); }}
+                    className="text-[11px] text-slate-400 hover:text-teal-600 mt-1.5">
+                    Remover a soletração
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setMundoOn(true)}
+                  className="w-full rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-500 hover:border-teal-400 hover:text-teal-700 transition-colors">
+                  Não conseguiu a subtração? Usar MUNDO (ODNUM)
+                </button>
+              )}
+            </div>
+          ) : s.words ? (
             <div className="space-y-2">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="flex items-center gap-2">
